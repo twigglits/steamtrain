@@ -1,0 +1,149 @@
+"""Command-line interface: scan / apply / status / revert."""
+
+import argparse
+import sys
+
+from . import __version__, apply as apply_mod, rules, steam, sysinfo
+
+
+def _build_parser():
+    parser = argparse.ArgumentParser(
+        prog="slob",
+        description="Set hardware-appropriate Steam launch options for installed games.",
+    )
+    parser.add_argument("--version", action="version", version=f"slob {__version__}")
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name, help_text in (
+        ("scan", "show installed games and proposed launch options"),
+        ("apply", "write launch options (skips anything a human set)"),
+        ("status", "show what this tool manages and last state"),
+        ("revert", "restore every option this tool set back to empty"),
+    ):
+        p = sub.add_parser(name, help=help_text)
+        p.add_argument("--steam-root", default=None, help="Steam root (auto-detected)")
+        p.add_argument("--config", default=rules.DEFAULT_CONFIG_PATH)
+        p.add_argument("--state-dir", default=apply_mod.DEFAULT_STATE_DIR)
+        if name == "apply":
+            p.add_argument("--dry-run", action="store_true", help="plan only, write nothing")
+    return parser
+
+
+def _context(args):
+    root = args.steam_root or steam.find_steam_root()
+    if root is None:
+        print("ERROR: no Steam installation found", file=sys.stderr)
+        return None
+    from pathlib import Path
+
+    return Path(root)
+
+
+def _proposals(root, args):
+    profile = sysinfo.detect()
+    config = rules.load_config(args.config)
+    games = steam.installed_games(root)
+    options = {}
+    names = {}
+    for game in games:
+        opts = rules.build_options(game, profile, config)
+        if opts is not None:
+            options[game.appid] = opts
+            names[game.appid] = game.name
+    return profile, games, options, names
+
+
+def _print_changes(changes):
+    for c in changes:
+        marker = {"set": "SET ", "skip-unchanged": "ok  ", "skip-user-set": "KEEP"}[c.action]
+        print(f"  [{marker}] user {c.user}  {c.appid:>8}  {c.name}")
+        if c.action == "set":
+            print(f"           {c.current or '(empty)'!s}  ->  {c.proposed or '(empty)'}")
+        elif c.action == "skip-user-set":
+            print(f"           keeping human-set value: {c.current}")
+
+
+def cmd_scan(args):
+    root = _context(args)
+    if root is None:
+        return 1
+    profile, games, options, names = _proposals(root, args)
+    print(f"System: {profile.distro} | {profile.desktop}/{profile.session} | "
+          f"{profile.gpu_name} ({profile.gpu_vendor} {profile.gpu_driver}) | "
+          f"gamemode={'yes' if profile.has_gamemode else 'no'} "
+          f"mangohud={'yes' if profile.has_mangohud else 'no'}")
+    print(f"Steam root: {root}  (running: {'yes' if steam.is_steam_running(root) else 'no'})")
+    if not games:
+        print("No installed games found on mounted libraries.")
+        return 0
+    print(f"\n{len(games)} installed game(s) on disk:")
+    for g in games:
+        print(f"  {g.appid:>8}  {g.runtime:<7}  {g.name}")
+        print(f"           library: {g.library}")
+        print(f"           proposed: {options.get(g.appid, '(excluded)')}")
+    return 0
+
+
+def cmd_apply(args):
+    root = _context(args)
+    if root is None:
+        return 1
+    _, games, options, names = _proposals(root, args)
+    state = apply_mod.State.load(args.state_dir)
+    changes = apply_mod.plan_changes(root, options, state, names)
+    _print_changes(changes)
+    planned = [c for c in changes if c.action == "set"]
+    if args.dry_run:
+        print(f"dry-run: {len(planned)} change(s) would be written, nothing touched")
+        return 0
+    try:
+        written = apply_mod.apply_changes(root, changes, args.state_dir)
+    except apply_mod.SteamRunningError as exc:
+        print(f"NOTE: {exc}")
+        return 0  # expected condition; the timer retries later
+    print(f"{len(written)} set, {len(changes) - len(written)} skipped")
+    return 0
+
+
+def cmd_status(args):
+    root = _context(args)
+    if root is None:
+        return 1
+    state = apply_mod.State.load(args.state_dir)
+    if not state.data:
+        print("No launch options are currently managed by this tool.")
+        return 0
+    print(f"{len(state.data)} managed launch option(s):")
+    for key, value in sorted(state.data.items()):
+        print(f"  {key}: {value}")
+    return 0
+
+
+def cmd_revert(args):
+    root = _context(args)
+    if root is None:
+        return 1
+    state = apply_mod.State.load(args.state_dir)
+    changes = apply_mod.plan_revert(root, state)
+    if not changes:
+        print("Nothing to revert.")
+        return 0
+    _print_changes(changes)
+    try:
+        written = apply_mod.apply_changes(root, changes, args.state_dir)
+    except apply_mod.SteamRunningError as exc:
+        print(f"NOTE: {exc}")
+        return 0
+    print(f"{len(written)} reverted")
+    return 0
+
+
+COMMANDS = {"scan": cmd_scan, "apply": cmd_apply, "status": cmd_status, "revert": cmd_revert}
+
+
+def main(argv=None):
+    args = _build_parser().parse_args(argv)
+    return COMMANDS[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
