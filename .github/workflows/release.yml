@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # The Version workflow chains into this one by dispatching it on the new tag
+  # (a tag pushed with GITHUB_TOKEN cannot trigger `on: push: tags` itself).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify the ref is a v* tag that matches the package version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) ;;
+            *) echo "Release must run on a v* tag ref, got $GITHUB_REF (dispatch this workflow on a tag)"; exit 1 ;;
+          esac
+          v=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' slob/__init__.py | head -n1)
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match slob/__init__.py version $v — releases must ship the version they claim"
+            exit 1
+          fi
+      - name: Run tests against the release ref
+        run: python3 -m unittest discover -s tests
+      - name: Build installable tarball
+        run: |
+          name="steam-launch-options-bot-${GITHUB_REF_NAME}"
+          tar --exclude='__pycache__' \
+              --transform "s,^,${name}/," \
+              -czf "${name}.tar.gz" \
+              slob systemd install.sh uninstall.sh README.md LICENSE
+          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+      - name: Create GitHub Release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Idempotent: create only if it doesn't already exist (safe to re-run).
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --verify-tag
+          fi
+          gh release upload "${GITHUB_REF_NAME}" --clobber \
+            "steam-launch-options-bot-${GITHUB_REF_NAME}.tar.gz" \
+            "steam-launch-options-bot-${GITHUB_REF_NAME}.tar.gz.sha256"

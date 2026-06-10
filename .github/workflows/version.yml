@@ -1,0 +1,92 @@
+name: Version
+
+# Automatic release versioning (semantic-release convention, mirrored from the
+# Sigo project): every push to main computes the next SemVer increment from
+# the conventional commits since the last v* tag — breaking -> major (minor
+# while on 0.x), feat -> minor, fix/perf/revert -> patch, docs/chore/ci-only
+# -> no release. When a release is due it bumps slob/__init__.py, commits,
+# tags, and chains into the Release workflow for that tag. Manual dispatch can
+# force a release or override the increment (the only way to cut 1.0.0 from
+# 0.x is `major`).
+#
+# Dispatch-chaining instead of relying on the tag push: refs pushed with the
+# default GITHUB_TOKEN do not trigger `on: push` workflows (GitHub's recursion
+# guard — which also makes a self-retrigger loop of this workflow impossible),
+# but workflow_dispatch is exempt. Manually pushed tags still trigger Release
+# directly.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Increment (auto = derive from conventional commits since the last tag; patch/minor/major force a release)"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+permissions:
+  contents: write
+  actions: write
+
+# Serialize: two rapid pushes must not race the bump-commit-tag sequence.
+concurrency:
+  group: version-release
+  cancel-in-progress: false
+
+jobs:
+  bump-tag-release:
+    runs-on: ubuntu-latest
+    # Never run on the release commit itself (only reachable via a non-default
+    # token; the default GITHUB_TOKEN cannot retrigger this workflow anyway).
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # next-version.sh needs full history and tags
+      - name: Compute next version
+        id: next
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
+        run: |
+          set +e
+          version=$(scripts/next-version.sh "$BUMP")
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "version=$version" >> "$GITHUB_OUTPUT" ;;
+            3) echo "skip=true" >> "$GITHUB_OUTPUT"
+               echo "No release-worthy commits since the last tag — skipping." ;;
+            *) exit "$rc" ;;
+          esac
+      - name: Bump version
+        if: ${{ steps.next.outputs.skip != 'true' }}
+        env:
+          NEXT: ${{ steps.next.outputs.version }}
+        run: |
+          sed -i "s/^__version__ = \".*\"/__version__ = \"$NEXT\"/" slob/__init__.py
+      - name: Verify the bump landed
+        if: ${{ steps.next.outputs.skip != 'true' }}
+        env:
+          NEXT: ${{ steps.next.outputs.version }}
+        run: |
+          grep -q "^__version__ = \"$NEXT\"$" slob/__init__.py
+          # The CLI must report the same version it will be released as.
+          [ "$(python3 -m slob --version)" = "slob $NEXT" ]
+      - name: Commit, tag, push
+        if: ${{ steps.next.outputs.skip != 'true' }}
+        env:
+          NEXT: ${{ steps.next.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): v$NEXT"
+          git tag "v$NEXT"
+          git push origin "HEAD:${GITHUB_REF_NAME}" "v$NEXT"
+      - name: Start the Release pipeline for the new tag
+        if: ${{ steps.next.outputs.skip != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT: ${{ steps.next.outputs.version }}
+        run: gh workflow run release.yml --ref "v$NEXT"

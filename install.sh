@@ -2,7 +2,7 @@
 # Install slob for the current user: package, launcher, systemd user units.
 set -eu
 
-REPO_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 LIB_DIR="$HOME/.local/lib/steam-launch-options-bot"
 BIN_DIR="$HOME/.local/bin"
 UNIT_DIR="$HOME/.config/systemd/user"
