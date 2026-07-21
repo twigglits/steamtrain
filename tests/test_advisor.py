@@ -103,5 +103,30 @@ class TestProtonDbSummary(unittest.TestCase):
         self.assertIsNone(advisor.protondb_summary("1", fetch=lambda url: "not json"))
 
 
+from tests.test_rules import game, profile  # noqa: E402  (fixtures reused)
+
+
+class TestBuildPrompt(unittest.TestCase):
+    def test_includes_hardware_and_game_and_contract(self):
+        p = build = advisor.build_prompt(
+            game(appid="292030", runtime="proton"), profile(),
+            "gamemoderun %command%", None,
+        )
+        self.assertIn("nvidia", p)          # profile.gpu_vendor
+        self.assertIn("wayland", p)         # profile.session
+        self.assertIn("292030", p)          # appid
+        self.assertIn("gamemoderun %command%", p)  # baseline
+        self.assertIn("{auto}", p)          # delta instruction
+        self.assertIn("STRICT JSON", p)     # output contract
+        self.assertIn("ProtonDB summary: unavailable", p)
+
+    def test_includes_protondb_when_present(self):
+        p = advisor.build_prompt(
+            game(), profile(), "gamemoderun %command%",
+            {"tier": "gold", "confidence": "high", "total": 5, "trendingTier": "gold"},
+        )
+        self.assertIn("tier=gold", p)
+
+
 if __name__ == "__main__":
     unittest.main()
