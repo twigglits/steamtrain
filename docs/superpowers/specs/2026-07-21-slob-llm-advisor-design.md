@@ -38,10 +38,11 @@ profile*.
 3. **Runtime:** invoke `claude -p` (headless Claude Code) by default —
    reuses existing Claude Code auth, no API key in the tool, no HTTP client for
    the LLM, no pip dependency. Configurable to any command.
-4. **Safety:** Steam launch options are arbitrary code execution
-   (`gamemoderun %command%` runs a command around the game). An LLM-proposed
-   override is therefore *proposed code*. It is validated, shown with
-   reasoning, and human-approved. **Never auto-applied, never in the timer.**
+4. **Safety:** Steam substitutes `%command%` and runs the launch-options
+   string **through a shell**, so launch options are arbitrary code execution
+   and an LLM-proposed override is *proposed code*. It is validated (against
+   shell injection, not just unknown wrappers), shown with reasoning, and
+   human-approved. **Never auto-applied, never in the timer.**
 
 ## Data flow
 
@@ -83,12 +84,18 @@ slob advise <appid> [--write]            # default: propose only, write nothing
   binary, or non-JSON output.
 
 - `validate_override(s)` -> `(ok: bool, reason: str)`  **security gate**
-  Allow only the shape real launch options take: `KEY=VALUE` env assignments,
-  word-shaped wrapper tokens (`gamemoderun`, `mangohud`, ...), `-`/`+` flags,
-  and exactly one `%command%`. Reject shell metacharacters
-  `` ; | & ` $( ) < > `` and newlines. Reject -> refuse to write, report the
-  string + reason. Not foolproof (a wrapper token is still some binary name),
-  which is exactly why the full string + reasoning is shown for human approval.
+  Runs on the fully `{auto}`-expanded string. Two layers, because Steam runs
+  the string through a shell:
+  (1) reject `` $ `` / backtick / backslash anywhere, and any *unquoted* shell
+  operator (`` ; | & < > ( ) { } `` / newline) — a metacharacter inside quotes
+  (e.g. `WINEDLLOVERRIDES="d3d11=n;dxgi=n"`) is literal and allowed;
+  (2) the leading command before `%command%` must be a known-safe wrapper
+  (env assignments, `-`/`+` flags, and a flag's bare argument are data), and
+  there must be exactly one `%command%`.
+  Reject -> refuse to write, report the string + reason. Deliberately
+  conservative (a rare option needing `$`/`\` or a non-flag wrapper argument is
+  rejected and added by hand), which is also why the full string + reasoning is
+  shown for human approval.
 
 - `advise(game, profile, config)` -> `Proposal`
   Orchestrates the above. `Proposal` dataclass:
