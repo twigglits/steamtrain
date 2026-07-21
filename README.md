@@ -66,8 +66,9 @@ slob apply --dry-run  # what would change, writing nothing
 slob apply            # write (skipped safely if Steam is running)
 slob status           # what the tool currently manages
 slob revert           # restore managed options to empty
-slob advise 292030   # LLM-propose a per-game override for your hardware (review only)
-slob advise 292030 --write   # save the reviewed proposal into overrides
+slob advise            # list installed games (no appid to look up)
+slob advise witcher    # LLM-propose an override, matched by game name (review only)
+slob advise witcher --write   # save the reviewed proposal into overrides
 ```
 
 ## Configuration
@@ -96,7 +97,8 @@ slob advise 292030 --write   # save the reviewed proposal into overrides
 
 ## LLM advisor (hybrid, opt-in)
 
-The scheduled bot stays fully deterministic and offline. `slob advise <appid>`
+The scheduled bot stays fully deterministic and offline. `slob advise <game>`
+(a game name, or run it bare to list installed games — no appid to look up)
 is a separate, on-demand step for the one thing rules can't do well: judging a
 *specific game's* community launch tips against *your* hardware.
 

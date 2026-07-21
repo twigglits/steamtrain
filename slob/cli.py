@@ -27,7 +27,9 @@ def _build_parser():
         if name == "apply":
             p.add_argument("--dry-run", action="store_true", help="plan only, write nothing")
         if name == "advise":
-            p.add_argument("appid", help="Steam appid to advise on")
+            p.add_argument("game", nargs="?",
+                           help="game name (any part, case-insensitive) or appid; "
+                                "omit to list installed games")
             p.add_argument("--write", action="store_true",
                            help="save the proposal into config overrides (re-run after reviewing)")
     return parser
@@ -142,17 +144,49 @@ def cmd_revert(args):
     return 0
 
 
+def _resolve_game(games, query):
+    """(game, error) — pick one installed game by appid or name substring.
+
+    Exact appid wins; otherwise a case-insensitive name-substring match. Returns
+    (None, message) when nothing matches or the name is ambiguous, so the caller
+    never has to know an appid.
+    """
+    for g in games:
+        if g.appid == query:
+            return g, None
+    q = query.casefold()
+    matches = [g for g in games if q in g.name.casefold()]
+    if len(matches) == 1:
+        return matches[0], None
+    if not matches:
+        return None, f"no installed game matches {query!r}. Run `slob advise` to list them."
+    listing = "\n".join(f"  {g.appid:>8}  {g.name}" for g in matches)
+    return None, f"{query!r} matches {len(matches)} games; be more specific:\n{listing}"
+
+
+def _list_installed(games):
+    print(f"{len(games)} installed game(s) — run `slob advise <name>`:")
+    for g in sorted(games, key=lambda g: g.name.casefold()):
+        print(f"  {g.appid:>8}  {g.runtime:<7}  {g.name}")
+
+
 def cmd_advise(args):
     root = _context(args)
     if root is None:
         return 1
+    games = steam.installed_games(root)
+    if not games:
+        print("No installed games found on mounted libraries.", file=sys.stderr)
+        return 1
+    if not args.game:
+        _list_installed(games)
+        return 0
+    game, err = _resolve_game(games, args.game)
+    if game is None:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
     profile = sysinfo.detect()
     config = rules.load_config(args.config)
-    game = next((g for g in steam.installed_games(root) if g.appid == str(args.appid)), None)
-    if game is None:
-        print(f"ERROR: appid {args.appid} is not installed on any mounted library",
-              file=sys.stderr)
-        return 1
     try:
         prop = advisor.advise(game, profile, config)
     except advisor.AdvisorError as exc:

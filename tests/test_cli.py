@@ -75,11 +75,11 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("0 set", out)
 
-    def _advise(self, *extra, override="{auto} -dx11", confidence="high"):
+    def _advise(self, *extra, selector="100", override="{auto} -dx11", confidence="high"):
         payload = {"override": override, "reasoning": "stabler on NVIDIA", "confidence": confidence}
         with mock.patch("slob.advisor.protondb_summary", return_value=None), \
              mock.patch("slob.advisor.run_llm", return_value=payload):
-            return self.run_cli("advise", "100", *extra)
+            return self.run_cli("advise", selector, *extra)
 
     def test_advise_propose_only_writes_nothing(self):
         code, out = self._advise()
@@ -106,6 +106,27 @@ class TestCli(unittest.TestCase):
              mock.patch("slob.advisor.run_llm", return_value={"override": None}):
             code, out = self.run_cli("advise", "999999")
         self.assertEqual(code, 1)
+
+    def test_advise_by_name_substring(self):
+        code, out = self._advise(selector="fixture")  # substring of "Fixture Game"
+        self.assertEqual(code, 0)
+        self.assertIn("-dx11", out)
+
+    def test_advise_no_arg_lists_games(self):
+        code, out = self.run_cli("advise")
+        self.assertEqual(code, 0)
+        self.assertIn("Fixture Game", out)
+        self.assertIn("100", out)
+
+    def test_advise_ambiguous_name_errors(self):
+        make_manifest(self.root, "200", "Fixture Two", "FixtureTwo")
+        code, out = self.run_cli("advise", "fixture")  # matches both games
+        self.assertEqual(code, 1)
+
+    def test_advise_unique_name_among_many(self):
+        make_manifest(self.root, "200", "Totally Different", "TotDiff")
+        code, out = self._advise(selector="totally")  # matches only "Totally Different"
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":
