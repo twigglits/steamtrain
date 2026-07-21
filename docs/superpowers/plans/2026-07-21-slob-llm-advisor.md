@@ -614,7 +614,10 @@ def _extract_json(text):
 
 
 def run_llm(prompt, command, *, run=subprocess.run):
-    argv = shlex.split(command)
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        raise AdvisorError(f"advisor_command is not a valid command: {exc}") from exc
     if not argv:
         raise AdvisorError("advisor_command is empty")
     try:
