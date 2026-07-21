@@ -19,6 +19,10 @@ import shlex
 import subprocess
 import urllib.request
 
+from dataclasses import dataclass
+
+from . import rules
+
 # Wrappers Steam may exec as the leading command. A wrapper's CLI must not treat
 # a following bare word as a subcommand to run (that word is not re-validated) —
 # vet that property before adding one here. `--` is handled by rejecting any
@@ -210,3 +214,38 @@ def run_llm(prompt, command, *, run=subprocess.run):
     data.setdefault("reasoning", "")
     data.setdefault("confidence", "low")
     return data
+
+
+@dataclass
+class Proposal:
+    appid: str
+    name: str
+    baseline: str
+    proposed: str | None
+    reasoning: str
+    confidence: str
+    valid: bool
+    warning: str
+
+
+def advise(game, profile, config, *, fetch=_default_fetch, run=subprocess.run):
+    base = rules.baseline(game, profile, config)
+    pdb = protondb_summary(game.appid, fetch=fetch)
+    prompt = build_prompt(game, profile, base, pdb)
+    data = run_llm(prompt, config.get("advisor_command", "claude -p"), run=run)
+    proposed = data.get("override")
+    if proposed is None:
+        valid, warning = True, ""
+    else:
+        proposed = str(proposed)
+        valid, warning = validate_override(proposed.replace("{auto}", base))
+    return Proposal(
+        appid=game.appid,
+        name=game.name,
+        baseline=base,
+        proposed=proposed,
+        reasoning=str(data.get("reasoning", "")),
+        confidence=str(data.get("confidence", "low")),
+        valid=valid,
+        warning=warning,
+    )
