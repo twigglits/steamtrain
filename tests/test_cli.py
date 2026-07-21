@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from slob import cli
-from slob import vdf
+from steamtrain import cli
+from steamtrain import vdf
 
 from tests.test_steam import make_manifest, make_steam_root
 
@@ -77,8 +77,8 @@ class TestCli(unittest.TestCase):
 
     def _advise(self, *extra, selector="100", override="{auto} -dx11", confidence="high"):
         payload = {"override": override, "reasoning": "stabler on NVIDIA", "confidence": confidence}
-        with mock.patch("slob.advisor.protondb_summary", return_value=None), \
-             mock.patch("slob.advisor.run_llm", return_value=payload):
+        with mock.patch("steamtrain.advisor.protondb_summary", return_value=None), \
+             mock.patch("steamtrain.advisor.run_llm", return_value=payload):
             return self.run_cli("advise", selector, *extra)
 
     def test_advise_propose_only_writes_nothing(self):
@@ -102,8 +102,8 @@ class TestCli(unittest.TestCase):
         self.assertNotIn("100", data.get("overrides", {}))
 
     def test_advise_unknown_appid_errors(self):
-        with mock.patch("slob.advisor.protondb_summary", return_value=None), \
-             mock.patch("slob.advisor.run_llm", return_value={"override": None}):
+        with mock.patch("steamtrain.advisor.protondb_summary", return_value=None), \
+             mock.patch("steamtrain.advisor.run_llm", return_value={"override": None}):
             code, out = self.run_cli("advise", "999999")
         self.assertEqual(code, 1)
 

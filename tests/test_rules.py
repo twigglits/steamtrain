@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from slob import rules
-from slob.steam import Game
-from slob.sysinfo import SystemProfile
+from steamtrain import rules
+from steamtrain.steam import Game
+from steamtrain.sysinfo import SystemProfile
 
 
 def profile(**kw):

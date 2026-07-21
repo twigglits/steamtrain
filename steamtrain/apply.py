@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import steam, vdf
 
-DEFAULT_STATE_DIR = Path("~/.local/state/steam-launch-options-bot").expanduser()
+DEFAULT_STATE_DIR = Path("~/.local/state/steamtrain").expanduser()
 BACKUPS_PER_USER = 10
 _APPS_PATH = ("UserLocalConfigStore", "Software", "Valve", "Steam", "apps")
 
@@ -156,7 +156,7 @@ def _backup(localconfig, user, state_dir):
 
 
 def _write_atomic(localconfig, text):
-    tmp = localconfig.with_name(localconfig.name + ".slob-tmp")
+    tmp = localconfig.with_name(localconfig.name + ".steamtrain-tmp")
     tmp.write_text(text, encoding="utf-8", errors="surrogateescape")
     shutil.copystat(localconfig, tmp)
     os.replace(tmp, localconfig)

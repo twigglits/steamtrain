@@ -11,7 +11,7 @@ game, and an option that helps elsewhere can hurt here.
 import json
 from pathlib import Path
 
-DEFAULT_CONFIG_PATH = Path("~/.config/steam-launch-options-bot/config.json").expanduser()
+DEFAULT_CONFIG_PATH = Path("~/.config/steamtrain/config.json").expanduser()
 
 _DOC = (
     "Edit and save; next run picks it up. enable_* toggle built-in rules. "

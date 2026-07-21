@@ -1,15 +1,15 @@
 #!/bin/sh
-# Remove slob: units, launcher, package. Steam configs are left as-is;
-# run `slob revert` BEFORE uninstalling if you want options restored.
+# Remove steamtrain: units, launcher, package. Steam configs are left as-is;
+# run `steamtrain revert` BEFORE uninstalling if you want options restored.
 set -eu
 
-systemctl --user disable --now steam-launch-options-bot.timer 2>/dev/null || true
-rm -f "$HOME/.config/systemd/user/steam-launch-options-bot.service" \
-      "$HOME/.config/systemd/user/steam-launch-options-bot.timer"
+systemctl --user disable --now steamtrain.timer 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/steamtrain.service" \
+      "$HOME/.config/systemd/user/steamtrain.timer"
 systemctl --user daemon-reload
 
-rm -f "$HOME/.local/bin/slob"
-rm -rf "$HOME/.local/lib/steam-launch-options-bot"
+rm -f "$HOME/.local/bin/steamtrain"
+rm -rf "$HOME/.local/lib/steamtrain"
 
-echo "Uninstalled. State/backups kept in ~/.local/state/steam-launch-options-bot"
-echo "and config in ~/.config/steam-launch-options-bot (delete manually if unwanted)."
+echo "Uninstalled. State/backups kept in ~/.local/state/steamtrain"
+echo "and config in ~/.config/steamtrain (delete manually if unwanted)."

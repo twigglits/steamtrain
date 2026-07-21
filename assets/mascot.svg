@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-label="Mascot for steam-launch-options-bot: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel. Steam puffs from the smokestack and hisses from the valve while the driving wheels turn — a visual pun on 'Steam' launch options.">
-  <title>steam-launch-options-bot — a steam valve riding a steam train, with steam coming out</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-label="Mascot for steamtrain: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel. Steam puffs from the smokestack and hisses from the valve while the driving wheels turn — a visual pun on 'Steam' launch options.">
+  <title>steamtrain — a steam valve riding a steam train, with steam coming out</title>
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#1b2838"/>
@@ -143,8 +143,8 @@
     <rect x="446" y="112" width="130" height="14" rx="6" fill="#2f4b63"/>
 
     <!-- nameplate -->
-    <rect x="360" y="210" width="80" height="26" rx="6" fill="#0f1c28" stroke="#d4a24e" stroke-width="2"/>
-    <text class="mono" x="400" y="228" text-anchor="middle" font-size="15" font-weight="700" fill="#e9c579" letter-spacing="2">slob</text>
+    <rect x="348" y="210" width="104" height="26" rx="6" fill="#0f1c28" stroke="#d4a24e" stroke-width="2"/>
+    <text class="mono" x="400" y="228" text-anchor="middle" font-size="12" font-weight="700" fill="#e9c579" letter-spacing="1.5">steamtrain</text>
 
     <!-- ===== the steam valve (the pun): brass gate valve + handwheel on the boiler ===== -->
     <g>

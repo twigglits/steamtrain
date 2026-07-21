@@ -1,4 +1,4 @@
-# steam-launch-options-bot
+# steamtrain
 
 <p align="center">
   <img src="assets/mascot.svg" width="760" height="380" alt="Project mascot: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel, steam puffing from the smokestack and hissing from the valve as the driving wheels turn — a visual pun on Steam launch options.">
@@ -36,7 +36,7 @@ known to break games (e.g. it never forces `SDL_VIDEODRIVER=wayland`).
 
 - **Never overwrites options a human set.** It only writes when the current
   value is empty or byte-identical to what it wrote previously (tracked in
-  `~/.local/state/steam-launch-options-bot/state.json`). Your manual tweaks
+  `~/.local/state/steamtrain/state.json`). Your manual tweaks
   always win.
 - **Never writes while Steam is running** (Steam would silently discard the
   change on exit). The timer just retries later.
@@ -45,7 +45,7 @@ known to break games (e.g. it never forces `SDL_VIDEODRIVER=wayland`).
 - **Only touches games that exist on disk**: a game counts as installed only
   if its `appmanifest_*.acf` is present in a *mounted* library and
   `steamapps/common/<installdir>/` exists.
-- `slob revert` restores everything it manages back to empty.
+- `steamtrain revert` restores everything it manages back to empty.
 
 ## Install
 
@@ -53,31 +53,31 @@ known to break games (e.g. it never forces `SDL_VIDEODRIVER=wayland`).
 ./install.sh
 ```
 
-This copies the package to `~/.local/lib/steam-launch-options-bot`, a `slob`
+This copies the package to `~/.local/lib/steamtrain`, a `steamtrain`
 launcher to `~/.local/bin`, and installs + starts a systemd **user** timer
 (2 min after boot, then every 30 min — new installs get options
 automatically). Restart Steam to see applied options take effect in the UI.
 
 ```sh
-./uninstall.sh        # run `slob revert` first if you want options cleared
+./uninstall.sh        # run `steamtrain revert` first if you want options cleared
 ```
 
 ## CLI
 
 ```sh
-slob scan             # detected system profile + per-game proposals
-slob apply --dry-run  # what would change, writing nothing
-slob apply            # write (skipped safely if Steam is running)
-slob status           # what the tool currently manages
-slob revert           # restore managed options to empty
-slob advise            # list installed games (no appid to look up)
-slob advise witcher    # LLM-propose an override, matched by game name (review only)
-slob advise witcher --write   # save the reviewed proposal into overrides
+steamtrain scan             # detected system profile + per-game proposals
+steamtrain apply --dry-run  # what would change, writing nothing
+steamtrain apply            # write (skipped safely if Steam is running)
+steamtrain status           # what the tool currently manages
+steamtrain revert           # restore managed options to empty
+steamtrain advise            # list installed games (no appid to look up)
+steamtrain advise witcher    # LLM-propose an override, matched by game name (review only)
+steamtrain advise witcher --write   # save the reviewed proposal into overrides
 ```
 
 ## Configuration
 
-`~/.config/steam-launch-options-bot/config.json` (created on first run):
+`~/.config/steamtrain/config.json` (created on first run):
 
 ```json
 {
@@ -101,7 +101,7 @@ slob advise witcher --write   # save the reviewed proposal into overrides
 
 ## LLM advisor (hybrid, opt-in)
 
-The scheduled bot stays fully deterministic and offline. `slob advise <game>`
+The scheduled bot stays fully deterministic and offline. `steamtrain advise <game>`
 (a game name, or run it bare to list installed games — no appid to look up)
 is a separate, on-demand step for the one thing rules can't do well: judging a
 *specific game's* community launch tips against *your* hardware.
@@ -110,7 +110,7 @@ It fetches the game's ProtonDB summary, asks an LLM (default `claude -p`, set
 `advisor_command` in config to change it) to filter that to your GPU/session,
 and prints a proposed override with its reasoning. The proposal is **validated**
 (launch options are executed code) and **never auto-applied** — re-run with
-`--write` to save it into `overrides`, after which the normal `slob apply`/timer
+`--write` to save it into `overrides`, after which the normal `steamtrain apply`/timer
 path applies it with all existing safety guarantees. The advisor never runs on
 the timer; no API key is stored (Claude Code owns auth).
 
@@ -118,9 +118,9 @@ the timer; no API key is stored (Claude Code owns auth).
 
 A user unit is the right default (all Steam data is user-owned), but a
 system-level variant works too — create
-`/etc/systemd/system/steam-launch-options-bot.service` with `User=<you>` and
+`/etc/systemd/system/steamtrain.service` with `User=<you>` and
 `Environment=HOME=/home/<you>`, plus a matching timer, and point `ExecStart`
-at `/home/<you>/.local/bin/slob apply`.
+at `/home/<you>/.local/bin/steamtrain apply`.
 
 ## Development
 

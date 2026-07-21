@@ -8,10 +8,10 @@ from . import __version__, apply as apply_mod, advisor, rules, steam, sysinfo
 
 def _build_parser():
     parser = argparse.ArgumentParser(
-        prog="slob",
+        prog="steamtrain",
         description="Set hardware-appropriate Steam launch options for installed games.",
     )
-    parser.add_argument("--version", action="version", version=f"slob {__version__}")
+    parser.add_argument("--version", action="version", version=f"steamtrain {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
         ("scan", "show installed games and proposed launch options"),
@@ -159,13 +159,13 @@ def _resolve_game(games, query):
     if len(matches) == 1:
         return matches[0], None
     if not matches:
-        return None, f"no installed game matches {query!r}. Run `slob advise` to list them."
+        return None, f"no installed game matches {query!r}. Run `steamtrain advise` to list them."
     listing = "\n".join(f"  {g.appid:>8}  {g.name}" for g in matches)
     return None, f"{query!r} matches {len(matches)} games; be more specific:\n{listing}"
 
 
 def _list_installed(games):
-    print(f"{len(games)} installed game(s) — run `slob advise <name>`:")
+    print(f"{len(games)} installed game(s) — run `steamtrain advise <name>`:")
     for g in sorted(games, key=lambda g: g.name.casefold()):
         print(f"  {g.appid:>8}  {g.runtime:<7}  {g.name}")
 
@@ -209,7 +209,7 @@ def cmd_advise(args):
         return 0
     rules.save_override(args.config, prop.appid, prop.proposed)
     print(f"\nSaved overrides[{prop.appid}] = {prop.proposed}")
-    print("Nothing changed yet — the next `slob apply` (or timer run) applies it.")
+    print("Nothing changed yet — the next `steamtrain apply` (or timer run) applies it.")
     return 0
 
 

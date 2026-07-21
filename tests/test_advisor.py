@@ -1,6 +1,6 @@
 import unittest
 
-from slob import advisor
+from steamtrain import advisor
 
 
 class TestValidateOverride(unittest.TestCase):
@@ -185,7 +185,7 @@ class TestRunLlm(unittest.TestCase):
 
 import json  # noqa: E402
 
-from slob import rules  # noqa: E402
+from steamtrain import rules  # noqa: E402
 
 
 class TestAdvise(unittest.TestCase):

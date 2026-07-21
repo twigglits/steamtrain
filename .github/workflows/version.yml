@@ -4,7 +4,7 @@ name: Version
 # Sigo project): every push to main computes the next SemVer increment from
 # the conventional commits since the last v* tag — breaking -> major (minor
 # while on 0.x), feat -> minor, fix/perf/revert -> patch, docs/chore/ci-only
-# -> no release. When a release is due it bumps slob/__init__.py, commits,
+# -> no release. When a release is due it bumps steamtrain/__init__.py, commits,
 # tags, and chains into the Release workflow for that tag. Manual dispatch can
 # force a release or override the increment (the only way to cut 1.0.0 from
 # 0.x is `major`).
@@ -65,15 +65,15 @@ jobs:
         env:
           NEXT: ${{ steps.next.outputs.version }}
         run: |
-          sed -i "s/^__version__ = \".*\"/__version__ = \"$NEXT\"/" slob/__init__.py
+          sed -i "s/^__version__ = \".*\"/__version__ = \"$NEXT\"/" steamtrain/__init__.py
       - name: Verify the bump landed
         if: ${{ steps.next.outputs.skip != 'true' }}
         env:
           NEXT: ${{ steps.next.outputs.version }}
         run: |
-          grep -q "^__version__ = \"$NEXT\"$" slob/__init__.py
+          grep -q "^__version__ = \"$NEXT\"$" steamtrain/__init__.py
           # The CLI must report the same version it will be released as.
-          [ "$(python3 -m slob --version)" = "slob $NEXT" ]
+          [ "$(python3 -m steamtrain --version)" = "steamtrain $NEXT" ]
       - name: Commit, tag, push
         if: ${{ steps.next.outputs.skip != 'true' }}
         env:
