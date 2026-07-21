@@ -46,6 +46,14 @@ class TestValidateOverride(unittest.TestCase):
         # bash treats a non-ASCII "KEY=val" token as a command name, not an assignment
         self.bad("café=marker %command%", "café")
 
+    def test_rejects_second_command_hidden_in_token(self):
+        # Steam substitutes the literal %command% wherever it appears, so a second
+        # occurrence smuggled into an env value or flag is an extra substitution point
+        self.bad("FOO=%command% gamemoderun %command%", "%command%")
+        self.bad("-x%command% gamemoderun %command%", "%command%")
+        # and a lone embedded one gives no standalone command position
+        self.bad("FOO=%command%", "%command%")
+
     def test_rejects_expansion(self):
         self.bad("`reboot` %command%")
         self.bad("FOO=$(whoami) %command%")
