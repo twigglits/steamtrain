@@ -32,6 +32,7 @@ def default_config():
         "enable_shader_cache_skip_cleanup": True,
         "enable_mesa_glthread": True,
         "enable_proton_wayland": False,
+        "advisor_command": "claude -p",
         "overrides": {},
         "exclude": [],
     }
@@ -83,3 +84,17 @@ def build_options(game, profile, config):
     if override is not None:
         return override.replace("{auto}", baseline)
     return baseline
+
+
+def baseline(game, profile, config):
+    """The generated hardware baseline for a game (what '{auto}' expands to)."""
+    return _baseline(game, profile, config)
+
+
+def save_override(path, appid, value):
+    """Merge overrides[appid]=value into the config file, preserving everything else."""
+    path = Path(path)
+    load_config(path)  # create the documented default file if it does not exist yet
+    data = json.loads(path.read_text())
+    data.setdefault("overrides", {})[str(appid)] = value
+    path.write_text(json.dumps(data, indent=2) + "\n")
