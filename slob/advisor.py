@@ -13,8 +13,10 @@ gate. Nothing is written without the user re-running with --write.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
+import urllib.request
 
 # Wrappers Steam may exec as the leading command. A wrapper's CLI must not treat
 # a following bare word as a subcommand to run (that word is not re-validated) —
@@ -38,6 +40,26 @@ _OPERATORS = set(";|&<>(){}\n\r\x00")
 
 class AdvisorError(RuntimeError):
     """LLM invocation or output could not be used."""
+
+
+_PROTONDB_URL = "https://www.protondb.com/api/v1/reports/summaries/{appid}.json"
+
+
+def _default_fetch(url):
+    with urllib.request.urlopen(url, timeout=10) as resp:  # fixed host, GET only
+        return resp.read().decode("utf-8")
+
+
+def protondb_summary(appid, *, fetch=_default_fetch):
+    """ProtonDB summary dict for appid, or None if unavailable.
+
+    ponytail: a bare `except Exception -> None` is deliberate — the advisor must
+    degrade to "no community data" on any network/parse failure, never crash.
+    """
+    try:
+        return json.loads(fetch(_PROTONDB_URL.format(appid=appid)))
+    except Exception:
+        return None
 
 
 def _is_env_assign(tok):

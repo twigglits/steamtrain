@@ -77,5 +77,31 @@ class TestValidateOverride(unittest.TestCase):
         self.bad("   ")
 
 
+class TestProtonDbSummary(unittest.TestCase):
+    def test_parses_summary(self):
+        payload = '{"tier": "gold", "confidence": "high", "total": 1234, "trendingTier": "gold"}'
+        data = advisor.protondb_summary("292030", fetch=lambda url: payload)
+        self.assertEqual(data["tier"], "gold")
+
+    def test_uses_appid_in_url(self):
+        seen = {}
+
+        def fake_fetch(url):
+            seen["url"] = url
+            return "{}"
+
+        advisor.protondb_summary("292030", fetch=fake_fetch)
+        self.assertIn("292030", seen["url"])
+
+    def test_none_on_fetch_error(self):
+        def boom(url):
+            raise OSError("offline")
+
+        self.assertIsNone(advisor.protondb_summary("1", fetch=boom))
+
+    def test_none_on_bad_json(self):
+        self.assertIsNone(advisor.protondb_summary("1", fetch=lambda url: "not json"))
+
+
 if __name__ == "__main__":
     unittest.main()
