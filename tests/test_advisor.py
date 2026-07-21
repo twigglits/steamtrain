@@ -173,5 +173,43 @@ class TestRunLlm(unittest.TestCase):
             advisor.run_llm("prompt", "does-not-exist", run=missing)
 
 
+import json  # noqa: E402
+
+from slob import rules  # noqa: E402
+
+
+class TestAdvise(unittest.TestCase):
+    def _run(self, override, confidence="high"):
+        payload = json.dumps({"override": override, "reasoning": "because", "confidence": confidence})
+        return lambda argv, **kw: SimpleNamespace(returncode=0, stdout=payload, stderr="")
+
+    def test_valid_delta_proposal(self):
+        prop = advisor.advise(
+            game("100", "proton"), profile(), rules.default_config(),
+            fetch=lambda url: "x",  # -> protondb None
+            run=self._run("{auto} -dx11"),
+        )
+        self.assertEqual(prop.proposed, "{auto} -dx11")
+        self.assertTrue(prop.valid)
+        self.assertEqual(prop.confidence, "high")
+        self.assertIn("gamemoderun %command%", prop.baseline)
+
+    def test_null_override_means_baseline_ok(self):
+        prop = advisor.advise(
+            game("100"), profile(), rules.default_config(),
+            fetch=lambda url: "x", run=self._run(None),
+        )
+        self.assertIsNone(prop.proposed)
+        self.assertTrue(prop.valid)
+
+    def test_unsafe_proposal_flagged_invalid(self):
+        prop = advisor.advise(
+            game("100"), profile(), rules.default_config(),
+            fetch=lambda url: "x", run=self._run("rm -rf ~ %command%"),
+        )
+        self.assertFalse(prop.valid)
+        self.assertIn("rm", prop.warning)
+
+
 if __name__ == "__main__":
     unittest.main()
