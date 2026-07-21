@@ -127,5 +127,3 @@ at `/home/<you>/.local/bin/steamtrain apply`.
 ```sh
 python3 -m unittest discover -s tests -v
 ```
-
-Design and plan docs live in `docs/superpowers/`.
