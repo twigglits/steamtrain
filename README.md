@@ -66,6 +66,8 @@ slob apply --dry-run  # what would change, writing nothing
 slob apply            # write (skipped safely if Steam is running)
 slob status           # what the tool currently manages
 slob revert           # restore managed options to empty
+slob advise 292030   # LLM-propose a per-game override for your hardware (review only)
+slob advise 292030 --write   # save the reviewed proposal into overrides
 ```
 
 ## Configuration
@@ -91,6 +93,20 @@ slob revert           # restore managed options to empty
 - `overrides` — appid → launch options used verbatim; `{auto}` expands to the
   generated baseline. This is where ProtonDB-sourced, hardware-vetted tips go.
 - `exclude` — appids the tool must never touch.
+
+## LLM advisor (hybrid, opt-in)
+
+The scheduled bot stays fully deterministic and offline. `slob advise <appid>`
+is a separate, on-demand step for the one thing rules can't do well: judging a
+*specific game's* community launch tips against *your* hardware.
+
+It fetches the game's ProtonDB summary, asks an LLM (default `claude -p`, set
+`advisor_command` in config to change it) to filter that to your GPU/session,
+and prints a proposed override with its reasoning. The proposal is **validated**
+(launch options are executed code) and **never auto-applied** — re-run with
+`--write` to save it into `overrides`, after which the normal `slob apply`/timer
+path applies it with all existing safety guarantees. The advisor never runs on
+the timer; no API key is stored (Claude Code owns auth).
 
 ## Running as a root system service instead
 

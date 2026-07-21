@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import __version__, apply as apply_mod, rules, steam, sysinfo
+from . import __version__, apply as apply_mod, advisor, rules, steam, sysinfo
 
 
 def _build_parser():
@@ -18,6 +18,7 @@ def _build_parser():
         ("apply", "write launch options (skips anything a human set)"),
         ("status", "show what this tool manages and last state"),
         ("revert", "restore every option this tool set back to empty"),
+        ("advise", "LLM-propose a per-game override for one appid (needs network + claude)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--steam-root", default=None, help="Steam root (auto-detected)")
@@ -25,6 +26,10 @@ def _build_parser():
         p.add_argument("--state-dir", default=apply_mod.DEFAULT_STATE_DIR)
         if name == "apply":
             p.add_argument("--dry-run", action="store_true", help="plan only, write nothing")
+        if name == "advise":
+            p.add_argument("appid", help="Steam appid to advise on")
+            p.add_argument("--write", action="store_true",
+                           help="save the proposal into config overrides (re-run after reviewing)")
     return parser
 
 
@@ -137,7 +142,47 @@ def cmd_revert(args):
     return 0
 
 
-COMMANDS = {"scan": cmd_scan, "apply": cmd_apply, "status": cmd_status, "revert": cmd_revert}
+def cmd_advise(args):
+    root = _context(args)
+    if root is None:
+        return 1
+    profile = sysinfo.detect()
+    config = rules.load_config(args.config)
+    game = next((g for g in steam.installed_games(root) if g.appid == str(args.appid)), None)
+    if game is None:
+        print(f"ERROR: appid {args.appid} is not installed on any mounted library",
+              file=sys.stderr)
+        return 1
+    try:
+        prop = advisor.advise(game, profile, config)
+    except advisor.AdvisorError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(f"{prop.name}  (appid {prop.appid}, {game.runtime})")
+    print(f"  baseline  : {prop.baseline}")
+    shown = prop.proposed if prop.proposed is not None else "(LLM: baseline already appropriate)"
+    print(f"  proposed  : {shown}")
+    print(f"  confidence: {prop.confidence}")
+    print(f"  reasoning : {prop.reasoning}")
+    if prop.proposed is None:
+        return 0
+    if not prop.valid:
+        print(f"  REJECTED by safety check: {prop.warning}", file=sys.stderr)
+        print("  Nothing written. Add it to overrides by hand only if you trust it.")
+        return 1
+    if not args.write:
+        print("\nReview looks right? Re-run with --write to save it to overrides.")
+        return 0
+    rules.save_override(args.config, prop.appid, prop.proposed)
+    print(f"\nSaved overrides[{prop.appid}] = {prop.proposed}")
+    print("Nothing changed yet — the next `slob apply` (or timer run) applies it.")
+    return 0
+
+
+COMMANDS = {
+    "scan": cmd_scan, "apply": cmd_apply, "status": cmd_status,
+    "revert": cmd_revert, "advise": cmd_advise,
+}
 
 
 def main(argv=None):
