@@ -71,10 +71,13 @@ def validate_override(s):
 
     Steam runs the substituted launch string through a shell, so the gate is two
     layers. Layer 1: no $/backtick/backslash anywhere, and no *unquoted* shell
-    operator (a metacharacter inside quotes is literal and allowed). Layer 2:
-    every token before %command% must be an env-assignment, an option flag, or a
-    known-safe wrapper — so the shell (and any wrapper it chains) execs nothing
-    unexpected. Input must already be {auto}-expanded.
+    operator (a metacharacter inside quotes is literal and allowed). Layer 2: the
+    literal text %command% must appear exactly once (Steam substitutes every
+    occurrence, so a second one hidden in an env value or flag is an extra,
+    ungated substitution point) and as a standalone token; every token before it
+    must be an env-assignment, an option flag, or a known-safe wrapper — so the
+    shell (and any wrapper it chains) execs nothing unexpected. Input must already
+    be {auto}-expanded.
 
     ponytail: a separate-token flag value (e.g. `-W 1920`) and an unknown wrapper
     are rejected, since a bare word before %command% could otherwise be a program
@@ -93,12 +96,14 @@ def validate_override(s):
     meta = _OPERATORS & set(unquoted)
     if meta:
         return False, f"unquoted shell metacharacter(s): {''.join(sorted(meta))}"
+    if s.count("%command%") != 1:  # matches Steam's literal-substring substitution
+        return False, "must contain exactly one %command%"
     try:
         tokens = shlex.split(s)  # safe now: balanced quotes, no unquoted operators
     except ValueError as exc:
         return False, f"unparseable launch string: {exc}"
     if tokens.count("%command%") != 1:
-        return False, "must contain exactly one %command%"
+        return False, "%command% must be a standalone token"
     for tok in tokens:
         if tok == "%command%":
             break  # no unquoted operators remain, so later tokens are game args
