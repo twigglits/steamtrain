@@ -482,7 +482,7 @@ def build_prompt(game, profile, baseline, protondb):
         f"- Helpers present: gamemode={profile.has_gamemode}, "
         f"mangohud={profile.has_mangohud}, gamescope={profile.has_gamescope}",
     ]
-    if protondb:
+    if isinstance(protondb, dict) and protondb:
         pdb = (
             f"ProtonDB summary: tier={protondb.get('tier')}, "
             f"confidence={protondb.get('confidence')}, "
