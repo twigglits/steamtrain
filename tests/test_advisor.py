@@ -108,7 +108,7 @@ from tests.test_rules import game, profile  # noqa: E402  (fixtures reused)
 
 class TestBuildPrompt(unittest.TestCase):
     def test_includes_hardware_and_game_and_contract(self):
-        p = build = advisor.build_prompt(
+        p = advisor.build_prompt(
             game(appid="292030", runtime="proton"), profile(),
             "gamemoderun %command%", None,
         )
@@ -171,6 +171,16 @@ class TestRunLlm(unittest.TestCase):
 
         with self.assertRaises(advisor.AdvisorError):
             advisor.run_llm("prompt", "does-not-exist", run=missing)
+
+    def test_raises_when_override_key_missing(self):
+        run = _proc(stdout='{"reasoning": "no override field here"}')
+        with self.assertRaises(advisor.AdvisorError):
+            advisor.run_llm("prompt", "fake", run=run)
+
+    def test_raises_on_malformed_command(self):
+        # unbalanced quote in advisor_command -> AdvisorError, not a raw ValueError
+        with self.assertRaises(advisor.AdvisorError):
+            advisor.run_llm("prompt", "claude -p 'unterminated", run=_proc())
 
 
 import json  # noqa: E402
