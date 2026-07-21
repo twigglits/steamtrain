@@ -131,7 +131,7 @@ class TestValidateOverride(unittest.TestCase):
         self.ok("PROTON_ENABLE_NVAPI=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 gamemoderun %command%")
         self.ok("mesa_glthread=true %command%")
         self.ok("gamemoderun mangohud %command%")
-        self.ok("gamescope -W 1920 -H 1080 -- gamemoderun %command%")
+        self.ok("gamescope -f -- gamemoderun %command%")  # wrapper chain, flags only
         self.ok("%command% -dx11")
 
     def test_accepts_quoted_env_values(self):
@@ -146,6 +146,18 @@ class TestValidateOverride(unittest.TestCase):
     def test_rejects_unknown_executable_before_command(self):
         self.bad("rm -rf ~ %command%", "rm")
         self.bad("curl evil.sh %command%", "curl")
+
+    def test_rejects_program_smuggled_as_flag_argument(self):
+        # gamescope's `-- <cmd>` execs <cmd>; a bare word before %command% is
+        # never an inert "flag value", so it must be rejected
+        self.bad("gamescope -- evilprog %command%", "evilprog")
+        self.bad("gamemoderun -e evilprog %command%", "evilprog")
+        # separate-token flag values are rejected too (conservative; use --flag=value)
+        self.bad("gamescope -W 1920 -- gamemoderun %command%", "1920")
+
+    def test_rejects_non_ascii_env_key(self):
+        # bash treats a non-ASCII "KEY=val" token as a command name, not an assignment
+        self.bad("café=marker %command%", "café")
 
     def test_rejects_expansion(self):
         self.bad("`reboot` %command%")
@@ -197,12 +209,22 @@ gate. Nothing is written without the user re-running with --write.
 
 from __future__ import annotations
 
+import re
 import shlex
 
+# Wrappers Steam may exec as the leading command. A wrapper's CLI must not treat
+# a following bare word as a subcommand to run (that word is not re-validated) —
+# vet that property before adding one here. `--` is handled by rejecting any
+# bare word before %command%, so gamescope's `-- <cmd>` cannot smuggle a program.
 KNOWN_WRAPPERS = frozenset({
     "gamemoderun", "mangohud", "mangoapp", "gamescope", "prime-run",
     "primusrun", "optirun", "strangle", "obs-gamecapture", "umu-run",
 })
+
+# A POSIX assignment word: ASCII identifier before the '='. bash treats a
+# non-ASCII "KEY=val" token as a command name, not an assignment, so isidentifier
+# (which accepts Unicode) is too lax for a security check.
+_ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 # Expansion/substitution/escape that must never appear, even inside quotes.
 _EXPANSION = ("`", "$", "\\")
@@ -216,7 +238,7 @@ class AdvisorError(RuntimeError):
 
 def _is_env_assign(tok):
     key, sep, _ = tok.partition("=")
-    return bool(sep) and key.isidentifier()
+    return bool(sep) and bool(_ENV_KEY_RE.fullmatch(key))
 
 
 def _strip_quoted(s):
@@ -245,14 +267,16 @@ def validate_override(s):
 
     Steam runs the substituted launch string through a shell, so the gate is two
     layers. Layer 1: no $/backtick/backslash anywhere, and no *unquoted* shell
-    operator (a metacharacter inside quotes is literal and allowed). Layer 2: the
-    leading command before %command% must be a known-safe wrapper, so the shell
-    execs nothing unexpected. Input must already be {auto}-expanded.
+    operator (a metacharacter inside quotes is literal and allowed). Layer 2:
+    every token before %command% must be an env-assignment, an option flag, or a
+    known-safe wrapper — so the shell (and any wrapper it chains) execs nothing
+    unexpected. Input must already be {auto}-expanded.
 
-    ponytail: a wrapper taking a non-flag bare argument (e.g. `strangle 60`) is
-    rejected, and values genuinely needing `$` or `\\` are rejected — add such
-    rarities to overrides by hand. Upgrade path: per-wrapper arity / a real shell
-    grammar if that ever matters.
+    ponytail: a separate-token flag value (e.g. `-W 1920`) and an unknown wrapper
+    are rejected, since a bare word before %command% could otherwise be a program
+    a wrapper execs (e.g. `gamescope -- evilprog`). Use `--flag=value` form, or
+    add the rarity to overrides by hand. Likewise values needing `$`/`\\` are
+    rejected. Upgrade path: a real shell grammar if that ever matters.
     """
     if not isinstance(s, str) or not s.strip():
         return False, "empty override"
@@ -271,24 +295,20 @@ def validate_override(s):
         return False, f"unparseable launch string: {exc}"
     if tokens.count("%command%") != 1:
         return False, "must contain exactly one %command%"
-    prev_is_flag = False
     for tok in tokens:
         if tok == "%command%":
             break  # no unquoted operators remain, so later tokens are game args
         if _is_env_assign(tok):
-            prev_is_flag = False
-        elif tok.startswith(("-", "+")):
-            prev_is_flag = True
-        elif tok in KNOWN_WRAPPERS:
-            prev_is_flag = False
-        elif prev_is_flag:
-            prev_is_flag = False  # bare argument to the preceding flag, e.g. -W 1920
-        else:
-            return False, f"unrecognized executable token {tok!r} before %command%"
+            continue
+        if tok.startswith(("-", "+")):
+            continue  # an option flag to a wrapper (inert; cannot name a program)
+        if tok in KNOWN_WRAPPERS:
+            continue
+        return False, f"unrecognized executable token {tok!r} before %command%"
     return True, ""
 ```
 
-Note: `import shlex` is added now (validate_override uses it). Only `from __future__ import annotations` and `import shlex` are added this task; later tasks add the other stdlib imports they use.
+Note: this task adds `from __future__ import annotations`, `import re`, and `import shlex` (all used by `validate_override`/`_is_env_assign`); later tasks add the other stdlib imports they use.
 
 - [ ] **Step 4: Run to verify it passes**
 
