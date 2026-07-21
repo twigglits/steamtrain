@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Compile check
-        run: python3 -m compileall -q slob tests
+        run: python3 -m compileall -q steamtrain tests
       - name: Test
         run: python3 -m unittest discover -s tests -v
 

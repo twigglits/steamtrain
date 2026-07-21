@@ -1,6 +1,6 @@
 import unittest
 
-from slob import sysinfo
+from steamtrain import sysinfo
 
 
 def fake_reader(files):

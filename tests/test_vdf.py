@@ -1,7 +1,7 @@
 import pathlib
 import unittest
 
-from slob import vdf
+from steamtrain import vdf
 
 SAMPLE = '"Root"\n{\n\t"key"\t\t"value"\n\t"Nested"\n\t{\n\t\t"a"\t\t"1"\n\t}\n}\n'
 

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from slob import steam
+from steamtrain import steam
 
 
 def make_manifest(library, appid, name, installdir, create_dir=True):

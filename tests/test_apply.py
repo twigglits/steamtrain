@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from slob import apply as apply_mod
-from slob import vdf
+from steamtrain import apply as apply_mod
+from steamtrain import vdf
 
 LOCALCONFIG = (
     '"UserLocalConfigStore"\n{\n'

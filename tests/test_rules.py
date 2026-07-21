@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from slob import rules
-from slob.steam import Game
-from slob.sysinfo import SystemProfile
+from steamtrain import rules
+from steamtrain.steam import Game
+from steamtrain.sysinfo import SystemProfile
 
 
 def profile(**kw):
@@ -102,6 +102,28 @@ class TestRules(unittest.TestCase):
             self.assertTrue(cfg2["enable_mangohud"])
             self.assertEqual(cfg2["overrides"]["42"], "{auto} -windowed")
             self.assertIn("exclude", cfg2)
+
+    def test_baseline_ignores_existing_override(self):
+        cfg = dict(self.config, overrides={"100": "{auto} -dx11"})
+        self.assertEqual(
+            rules.baseline(game("100"), profile(), cfg),
+            "PROTON_ENABLE_NVAPI=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 gamemoderun %command%",
+        )
+
+    def test_save_override_preserves_other_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            rules.load_config(path)  # writes documented default
+            data = json.loads(path.read_text())
+            data["enable_mangohud"] = True
+            path.write_text(json.dumps(data))
+            rules.save_override(path, "100", "{auto} -dx11")
+            reloaded = json.loads(path.read_text())
+            self.assertEqual(reloaded["overrides"]["100"], "{auto} -dx11")
+            self.assertTrue(reloaded["enable_mangohud"])  # untouched
+
+    def test_advisor_command_default(self):
+        self.assertEqual(rules.default_config()["advisor_command"], "claude -p")
 
 
 if __name__ == "__main__":

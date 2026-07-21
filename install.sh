@@ -1,32 +1,32 @@
 #!/bin/sh
-# Install slob for the current user: package, launcher, systemd user units.
+# Install steamtrain for the current user: package, launcher, systemd user units.
 set -eu
 
 REPO_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-LIB_DIR="$HOME/.local/lib/steam-launch-options-bot"
+LIB_DIR="$HOME/.local/lib/steamtrain"
 BIN_DIR="$HOME/.local/bin"
 UNIT_DIR="$HOME/.config/systemd/user"
 
 mkdir -p "$LIB_DIR" "$BIN_DIR" "$UNIT_DIR"
 
-rm -rf "$LIB_DIR/slob"
-cp -r "$REPO_DIR/slob" "$LIB_DIR/slob"
+rm -rf "$LIB_DIR/steamtrain"
+cp -r "$REPO_DIR/steamtrain" "$LIB_DIR/steamtrain"
 
-cat > "$BIN_DIR/slob" <<EOF
+cat > "$BIN_DIR/steamtrain" <<EOF
 #!/bin/sh
 export PYTHONPATH="$LIB_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
-exec python3 -m slob "\$@"
+exec python3 -m steamtrain "\$@"
 EOF
-chmod +x "$BIN_DIR/slob"
+chmod +x "$BIN_DIR/steamtrain"
 
-cp "$REPO_DIR/systemd/steam-launch-options-bot.service" \
-   "$REPO_DIR/systemd/steam-launch-options-bot.timer" "$UNIT_DIR/"
+cp "$REPO_DIR/systemd/steamtrain.service" \
+   "$REPO_DIR/systemd/steamtrain.timer" "$UNIT_DIR/"
 
 systemctl --user daemon-reload
-systemctl --user enable --now steam-launch-options-bot.timer
+systemctl --user enable --now steamtrain.timer
 
 echo "Installed. Useful commands:"
-echo "  slob scan                                          # see proposals"
-echo "  slob apply --dry-run                               # plan without writing"
-echo "  systemctl --user list-timers steam-launch-options-bot.timer"
-echo "  journalctl --user -u steam-launch-options-bot.service -e"
+echo "  steamtrain scan                                          # see proposals"
+echo "  steamtrain apply --dry-run                               # plan without writing"
+echo "  systemctl --user list-timers steamtrain.timer"
+echo "  journalctl --user -u steamtrain.service -e"
