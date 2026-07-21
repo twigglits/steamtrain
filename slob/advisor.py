@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import subprocess
 import urllib.request
 
 # Wrappers Steam may exec as the leading command. A wrapper's CLI must not treat
@@ -176,3 +177,36 @@ def build_prompt(game, profile, baseline, protondb):
         '{"override": string-or-null, "reasoning": string, '
         '"confidence": "low"|"medium"|"high"}'
     )
+
+
+def _extract_json(text):
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise AdvisorError(f"no JSON object in LLM output: {text[:200]!r}")
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError as exc:
+        raise AdvisorError(f"invalid JSON from LLM: {exc}") from exc
+
+
+def run_llm(prompt, command, *, run=subprocess.run):
+    argv = shlex.split(command)
+    if not argv:
+        raise AdvisorError("advisor_command is empty")
+    try:
+        result = run(argv, input=prompt, capture_output=True, text=True, timeout=300)
+    except FileNotFoundError as exc:
+        raise AdvisorError(f"advisor command not found: {argv[0]}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AdvisorError("advisor command timed out") from exc
+    if result.returncode != 0:
+        raise AdvisorError(
+            f"advisor command exited {result.returncode}: {result.stderr.strip()[:300]}"
+        )
+    data = _extract_json(result.stdout)
+    if "override" not in data:
+        raise AdvisorError("LLM JSON missing 'override' field")
+    data.setdefault("reasoning", "")
+    data.setdefault("confidence", "low")
+    return data
