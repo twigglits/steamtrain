@@ -137,3 +137,42 @@ def validate_override(s):
             continue
         return False, f"unrecognized executable token {tok!r} before %command%"
     return True, ""
+
+
+def build_prompt(game, profile, baseline, protondb):
+    facts = [
+        f"- GPU: {profile.gpu_name} (vendor={profile.gpu_vendor}, driver={profile.gpu_driver})",
+        f"- Session: {profile.session} on {profile.desktop}, {profile.distro}",
+        f"- Runtime for this game: {game.runtime}",
+        f"- Helpers present: gamemode={profile.has_gamemode}, "
+        f"mangohud={profile.has_mangohud}, gamescope={profile.has_gamescope}",
+    ]
+    if isinstance(protondb, dict) and protondb:
+        pdb = (
+            f"ProtonDB summary: tier={protondb.get('tier')}, "
+            f"confidence={protondb.get('confidence')}, "
+            f"trendingTier={protondb.get('trendingTier')}, "
+            f"reports={protondb.get('total')}."
+        )
+    else:
+        pdb = "ProtonDB summary: unavailable."
+    return (
+        "You are an expert Linux Steam gaming advisor. Recommend launch options "
+        f'for the game "{game.name}" (appid {game.appid}) tuned to THIS machine.\n\n'
+        "This machine:\n" + "\n".join(facts) + "\n\n"
+        f"{pdb}\n\n"
+        f"The tool's generated hardware baseline for this game is:\n  {baseline}\n"
+        "In your answer, the literal token {auto} expands to exactly that baseline. "
+        'Prefer returning {auto} plus any game-specific tokens (e.g. "{auto} -dx11") '
+        "so the hardware baseline stays owned by the tool.\n\n"
+        "Rules:\n"
+        "- Only suggest options that help THIS hardware/session; never anything "
+        "known to break the game. Be conservative.\n"
+        "- Allowed: KEY=VALUE env vars, known wrappers (gamemoderun, mangohud, "
+        "gamescope), and Steam launch flags. Exactly one %command%. No shell "
+        "metacharacters, no command substitution.\n"
+        "- If the baseline is already appropriate, return override=null.\n\n"
+        "Respond with STRICT JSON only, no prose outside it:\n"
+        '{"override": string-or-null, "reasoning": string, '
+        '"confidence": "low"|"medium"|"high"}'
+    )
