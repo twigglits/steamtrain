@@ -18,7 +18,7 @@ class TestValidateOverride(unittest.TestCase):
         self.ok("PROTON_ENABLE_NVAPI=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 gamemoderun %command%")
         self.ok("mesa_glthread=true %command%")
         self.ok("gamemoderun mangohud %command%")
-        self.ok("gamescope -W 1920 -H 1080 -- gamemoderun %command%")
+        self.ok("gamescope -f -- gamemoderun %command%")  # wrapper chain, flags only
         self.ok("%command% -dx11")
 
     def test_accepts_quoted_env_values(self):
@@ -33,6 +33,18 @@ class TestValidateOverride(unittest.TestCase):
     def test_rejects_unknown_executable_before_command(self):
         self.bad("rm -rf ~ %command%", "rm")
         self.bad("curl evil.sh %command%", "curl")
+
+    def test_rejects_program_smuggled_as_flag_argument(self):
+        # gamescope's `-- <cmd>` execs <cmd>; a bare word before %command% is
+        # never an inert "flag value", so it must be rejected
+        self.bad("gamescope -- evilprog %command%", "evilprog")
+        self.bad("gamemoderun -e evilprog %command%", "evilprog")
+        # separate-token flag values are rejected too (conservative; use --flag=value)
+        self.bad("gamescope -W 1920 -- gamemoderun %command%", "1920")
+
+    def test_rejects_non_ascii_env_key(self):
+        # bash treats a non-ASCII "KEY=val" token as a command name, not an assignment
+        self.bad("café=marker %command%", "café")
 
     def test_rejects_expansion(self):
         self.bad("`reboot` %command%")
