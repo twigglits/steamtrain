@@ -128,5 +128,50 @@ class TestBuildPrompt(unittest.TestCase):
         self.assertIn("tier=gold", p)
 
 
+from types import SimpleNamespace  # noqa: E402
+
+
+def _proc(returncode=0, stdout="", stderr=""):
+    return lambda argv, **kw: SimpleNamespace(
+        returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+class TestRunLlm(unittest.TestCase):
+    def test_parses_plain_json(self):
+        run = _proc(stdout='{"override": "{auto} -dx11", "reasoning": "r", "confidence": "high"}')
+        data = advisor.run_llm("prompt", "fake", run=run)
+        self.assertEqual(data["override"], "{auto} -dx11")
+        self.assertEqual(data["confidence"], "high")
+
+    def test_parses_fenced_json_with_prose(self):
+        run = _proc(stdout='Here you go:\n```json\n{"override": null, "reasoning": "ok"}\n```\n')
+        data = advisor.run_llm("prompt", "fake", run=run)
+        self.assertIsNone(data["override"])
+        self.assertEqual(data["confidence"], "low")  # defaulted
+
+    def test_defaults_reasoning_and_confidence(self):
+        run = _proc(stdout='{"override": null}')
+        data = advisor.run_llm("prompt", "fake", run=run)
+        self.assertEqual(data["reasoning"], "")
+        self.assertEqual(data["confidence"], "low")
+
+    def test_raises_on_nonzero_exit(self):
+        run = _proc(returncode=2, stderr="boom")
+        with self.assertRaises(advisor.AdvisorError):
+            advisor.run_llm("prompt", "fake", run=run)
+
+    def test_raises_on_non_json(self):
+        run = _proc(stdout="I could not help with that.")
+        with self.assertRaises(advisor.AdvisorError):
+            advisor.run_llm("prompt", "fake", run=run)
+
+    def test_raises_when_binary_missing(self):
+        def missing(argv, **kw):
+            raise FileNotFoundError(argv[0])
+
+        with self.assertRaises(advisor.AdvisorError):
+            advisor.run_llm("prompt", "does-not-exist", run=missing)
+
+
 if __name__ == "__main__":
     unittest.main()
