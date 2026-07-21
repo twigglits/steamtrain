@@ -177,14 +177,6 @@ re-running with --write.
 
 from __future__ import annotations
 
-import json
-import shlex
-import subprocess
-import urllib.request
-from dataclasses import dataclass
-
-from . import rules
-
 KNOWN_WRAPPERS = frozenset({
     "gamemoderun", "mangohud", "mangoapp", "gamescope", "prime-run",
     "primusrun", "optirun", "strangle", "obs-gamecapture", "umu-run",
@@ -241,7 +233,7 @@ def validate_override(s):
     return True, ""
 ```
 
-Note: `rules`, `json`, `shlex`, `subprocess`, `urllib.request`, `dataclass` are imported now and used by later tasks in this same file; leaving them imported keeps Task 3–6 diffs to additions only.
+Note: only the `from __future__ import annotations` directive is added now (it is never an "unused import"); later tasks add the stdlib imports they actually use. `validate_override`/`AdvisorError` need no module imports.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -302,7 +294,16 @@ class TestProtonDbSummary(unittest.TestCase):
 Run: `python3 -m unittest tests.test_advisor.TestProtonDbSummary -v`
 Expected: FAIL — `AttributeError: module 'slob.advisor' has no attribute 'protondb_summary'`.
 
-- [ ] **Step 3: Implement** — add to `slob/advisor.py` (after `AdvisorError`):
+- [ ] **Step 3: Implement**
+
+First add these imports at the top of `slob/advisor.py`, right below the `from __future__ import annotations` line:
+
+```python
+import json
+import urllib.request
+```
+
+Then add this code (after `AdvisorError`):
 
 ```python
 _PROTONDB_URL = "https://www.protondb.com/api/v1/reports/summaries/{appid}.json"
@@ -502,7 +503,16 @@ class TestRunLlm(unittest.TestCase):
 Run: `python3 -m unittest tests.test_advisor.TestRunLlm -v`
 Expected: FAIL — `AttributeError: module 'slob.advisor' has no attribute 'run_llm'`.
 
-- [ ] **Step 3: Implement** — add to `slob/advisor.py`:
+- [ ] **Step 3: Implement**
+
+First add these imports at the top of `slob/advisor.py`, in the stdlib import group (below `import json`):
+
+```python
+import shlex
+import subprocess
+```
+
+Then add this code:
 
 ```python
 def _extract_json(text):
@@ -608,7 +618,17 @@ class TestAdvise(unittest.TestCase):
 Run: `python3 -m unittest tests.test_advisor.TestAdvise -v`
 Expected: FAIL — `AttributeError: module 'slob.advisor' has no attribute 'advise'`.
 
-- [ ] **Step 3: Implement** — add to `slob/advisor.py`:
+- [ ] **Step 3: Implement**
+
+First add these imports at the top of `slob/advisor.py` — `from dataclasses import dataclass` in a group below the stdlib imports, and `from . import rules` as a local import below that:
+
+```python
+from dataclasses import dataclass
+
+from . import rules
+```
+
+Then add this code:
 
 ```python
 @dataclass
