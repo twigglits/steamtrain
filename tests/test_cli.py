@@ -1,8 +1,10 @@
 import contextlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from slob import cli
 from slob import vdf
@@ -72,6 +74,38 @@ class TestCli(unittest.TestCase):
         code, out = self.run_cli("apply")
         self.assertEqual(code, 0)
         self.assertIn("0 set", out)
+
+    def _advise(self, *extra, override="{auto} -dx11", confidence="high"):
+        payload = {"override": override, "reasoning": "stabler on NVIDIA", "confidence": confidence}
+        with mock.patch("slob.advisor.protondb_summary", return_value=None), \
+             mock.patch("slob.advisor.run_llm", return_value=payload):
+            return self.run_cli("advise", "100", *extra)
+
+    def test_advise_propose_only_writes_nothing(self):
+        code, out = self._advise()
+        self.assertEqual(code, 0)
+        self.assertIn("-dx11", out)
+        self.assertIn("--write", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertNotIn("100", data.get("overrides", {}))
+
+    def test_advise_write_saves_override(self):
+        code, out = self._advise("--write")
+        self.assertEqual(code, 0)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["overrides"]["100"], "{auto} -dx11")
+
+    def test_advise_rejects_unsafe_override(self):
+        code, out = self._advise("--write", override="rm -rf ~ %command%")
+        self.assertEqual(code, 1)
+        data = json.loads(self.config_path.read_text())
+        self.assertNotIn("100", data.get("overrides", {}))
+
+    def test_advise_unknown_appid_errors(self):
+        with mock.patch("slob.advisor.protondb_summary", return_value=None), \
+             mock.patch("slob.advisor.run_llm", return_value={"override": None}):
+            code, out = self.run_cli("advise", "999999")
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":
