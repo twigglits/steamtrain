@@ -1,5 +1,9 @@
 # steam-launch-options-bot
 
+<p align="center">
+  <img src="assets/mascot.svg" width="760" height="380" alt="Project mascot: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel, steam puffing from the smokestack and hissing from the valve as the driving wheels turn — a visual pun on Steam launch options.">
+</p>
+
 A systemd service for Ubuntu LTS that scans your installed Steam games (only
 game folders that actually exist on disk) and sets launch options appropriate
 for **your** OS, desktop environment, and hardware.
