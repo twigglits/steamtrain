@@ -154,17 +154,17 @@ class TestCli(unittest.TestCase):
         data = json.loads(self.config_path.read_text())
         self.assertEqual(data["gpu_vendor"], "nvidia")
 
-    def test_setup_detected_vendor_does_not_prompt(self):
+    def test_setup_detected_vendor_confirm_accepts(self):
         profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
         with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
-             mock.patch("builtins.input") as inp:
+             mock.patch("builtins.input", return_value="") as inp:
             code, out = self.run_setup()
         self.assertEqual(code, 0)
-        inp.assert_not_called()
+        inp.assert_called_once()  # only the confirm prompt, no menu follows
         self.assertIn("nvidia", out)
         data = json.loads(self.config_path.read_text())
         # load_config creates the documented default file; the point is that
-        # no vendor was written on the detected path.
+        # confirming the detection writes no vendor.
         self.assertEqual(data["gpu_vendor"], "")
 
     def test_setup_reprompts_until_valid(self):
@@ -177,9 +177,10 @@ class TestCli(unittest.TestCase):
 
     def test_setup_skip_writes_nothing(self):
         with mock.patch("steamtrain.sysinfo.detect", return_value=fake_profile("unknown")), \
-             mock.patch("builtins.input", return_value="4"):
+             mock.patch("builtins.input", return_value="5"):
             code, out = self.run_setup()
         self.assertEqual(code, 0)
+        self.assertIn("autodetection stays in effect", out)
         data = json.loads(self.config_path.read_text())
         self.assertEqual(data["gpu_vendor"], "")
 
@@ -202,7 +203,7 @@ class TestCli(unittest.TestCase):
     def test_setup_unknown_with_override_skip_keeps_override(self):
         self.config_path.write_text(json.dumps({"gpu_vendor": "nvidia"}))
         with mock.patch("steamtrain.sysinfo.detect", return_value=fake_profile("unknown")), \
-             mock.patch("builtins.input", return_value="4"):
+             mock.patch("builtins.input", return_value="5"):
             code, out = self.run_setup()
         self.assertEqual(code, 0)
         self.assertIn("gpu_vendor='nvidia'", out)
@@ -224,21 +225,137 @@ class TestCli(unittest.TestCase):
         self.config_path.write_text(json.dumps({"gpu_vendor": "amd"}))
         profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
         with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
-             mock.patch("builtins.input") as inp:
+             mock.patch("builtins.input", return_value=""):
             code, out = self.run_setup()
         self.assertEqual(code, 0)
-        inp.assert_not_called()
         self.assertIn("wins over autodetection", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "amd")  # confirm accepted, override untouched
 
     def test_setup_detected_with_unrecognized_override_notes_it(self):
         self.config_path.write_text(json.dumps({"gpu_vendor": "banana"}))
         profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
         with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
-             mock.patch("builtins.input") as inp:
+             mock.patch("builtins.input", return_value=""):
             code, out = self.run_setup()
         self.assertEqual(code, 0)
-        inp.assert_not_called()
         self.assertIn("not recognized", out)
+
+    def test_setup_detected_disagree_persists_vendor(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", "2"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "amd")
+
+    def test_confirm_reprompts_on_ambiguous_answer(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["nope", "n", "2"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        self.assertIn("Please answer y or n", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "amd")
+
+    def test_confirm_explicit_yes_writes_nothing(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", return_value="y") as inp:
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        inp.assert_called_once()
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_detected_disagree_skip_writes_nothing(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", "5"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_detected_disagree_menu_eof_writes_nothing(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", EOFError]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_detected_disagree_menu_interrupt_exits_130(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", KeyboardInterrupt]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 130)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_clear_with_no_override_is_honest_noop(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", "4"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        self.assertIn("already in effect", out)
+        self.assertNotIn("Cleared", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_unknown_with_junk_override_notes_ignored(self):
+        self.config_path.write_text(json.dumps({"gpu_vendor": "banana"}))
+        with mock.patch("steamtrain.sysinfo.detect", return_value=fake_profile("unknown")), \
+             mock.patch("builtins.input", return_value="5"):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        self.assertIn("not recognized", out)
+        self.assertIn("gpu_vendor='banana'", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "banana")
+
+    def test_setup_disagree_clear_override_writes_empty(self):
+        self.config_path.write_text(json.dumps({"gpu_vendor": "amd"}))
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=["n", "4"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        self.assertIn("autodetection is back in effect", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_unknown_skips_confirm(self):
+        with mock.patch("steamtrain.sysinfo.detect", return_value=fake_profile("unknown")), \
+             mock.patch("builtins.input", side_effect=["1"]):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        self.assertNotIn("[Y/n]", out)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "nvidia")
+
+    def test_setup_detected_confirm_eof_accepts(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=EOFError):
+            code, out = self.run_setup()
+        self.assertEqual(code, 0)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
+
+    def test_setup_detected_confirm_keyboard_interrupt_exits_130(self):
+        profile = fake_profile("nvidia", gpu_name="NVIDIA GPU", gpu_driver="595.71.05")
+        with mock.patch("steamtrain.sysinfo.detect", return_value=profile), \
+             mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            code, out = self.run_setup()
+        self.assertEqual(code, 130)
+        data = json.loads(self.config_path.read_text())
+        self.assertEqual(data["gpu_vendor"], "")
 
     def test_malformed_config_errors_cleanly(self):
         # syntax error, valid-but-non-object roots

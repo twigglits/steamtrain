@@ -82,7 +82,7 @@ supported; the installer checks and refuses cleanly.
 ## CLI
 
 ```sh
-steamtrain setup            # show detected hardware; pick a GPU vendor if autodetect failed
+steamtrain setup            # confirm detected hardware, or pick/clear the GPU vendor
 steamtrain scan             # detected system profile + per-game proposals
 steamtrain apply --dry-run  # what would change, writing nothing
 steamtrain apply            # write (skipped safely if Steam is running)
@@ -94,13 +94,15 @@ steamtrain advise witcher --write   # save the reviewed proposal into overrides
 ```
 
 `steamtrain setup` (also run automatically at the end of an interactive
-install) prints the autodetected hardware profile. If GPU autodetection fails
-it shows a numbered menu — 1) NVIDIA 2) AMD 3) Intel 4) Skip — and saves your
-choice as the `gpu_vendor` config key. When the GPU is detected it just prints
-the summary and notes any active override, without prompting. The menu only
-appears when detection *fails*; if detection succeeds but picks the wrong GPU
-(e.g. hybrid graphics), set `gpu_vendor` in the config by hand. To go back to
-autodetection, set it to `""` (or delete the key).
+install) prints the autodetected hardware profile and asks you to confirm it
+(`[Y/n]`, Enter accepts). Confirm and nothing is written. Disagree — e.g. a
+hybrid-graphics laptop where the wrong GPU was detected — and it shows a
+numbered menu: 1) NVIDIA 2) AMD 3) Intel 4) Autodetect (clear override)
+5) Skip. Picks 1–3 save `gpu_vendor`; 4 clears it back to `""` so autodetection
+governs again; 5 changes nothing. When autodetection *fails*, the confirm step
+is skipped and the menu appears directly. Piped/non-interactive runs never
+write: they accept the detection at the confirm prompt, and if detection failed
+the menu treats end-of-input as Skip.
 
 ## Configuration
 
@@ -123,10 +125,10 @@ autodetection, set it to `""` (or delete the key).
 ```
 
 - `gpu_vendor` — force the GPU vendor (`nvidia` / `amd` / `intel`) when
-  autodetection fails; `""` means autodetect (the default). Set it with
-  `steamtrain setup`; an override wins over detection, an unrecognized value is
-  ignored (with a warning) and autodetection is used. Existing config files
-  without this key keep autodetecting.
+  autodetection fails or picks the wrong one; `""` means autodetect (the
+  default). Set it with `steamtrain setup`; an override wins over detection, an
+  unrecognized value is ignored (with a warning) and autodetection is used.
+  Existing config files without this key keep autodetecting.
 - `enable_*` — toggle individual built-in rules.
 - `overrides` — appid → launch options used verbatim; `{auto}` expands to the
   generated baseline. This is where ProtonDB-sourced, hardware-vetted tips go.

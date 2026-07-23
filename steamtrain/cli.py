@@ -34,7 +34,7 @@ def _build_parser():
             p.add_argument("--write", action="store_true",
                            help="save the proposal into config overrides (re-run after reviewing)")
     setup = sub.add_parser(
-        "setup", help="show detected hardware; pick a GPU vendor when autodetection fails")
+        "setup", help="confirm detected hardware; pick or clear the GPU vendor if wrong")
     setup.add_argument("--config", default=rules.DEFAULT_CONFIG_PATH)
     return parser
 
@@ -243,16 +243,19 @@ def cmd_advise(args):
     return 0
 
 
+_SKIP = object()  # menu "Skip": change nothing; distinct from "" (clear override -> autodetect)
+
 _VENDOR_MENU = (
     ("1", "nvidia", "NVIDIA"),
     ("2", "amd", "AMD"),
     ("3", "intel", "Intel"),
-    ("4", "", "Skip (no change)"),
+    ("4", "", "Autodetect (clear override)"),
+    ("5", _SKIP, "Skip (no change)"),
 )
 
 
 def _prompt_gpu_vendor():
-    """Numbered menu -> chosen vendor ('' for skip), or None on EOF.
+    """Numbered menu -> chosen vendor, "" (clear override), or _SKIP; None on EOF.
 
     KeyboardInterrupt propagates to the caller (exit 130).
     """
@@ -261,13 +264,31 @@ def _prompt_gpu_vendor():
     choices = {num: value for num, value, _ in _VENDOR_MENU}
     while True:
         try:
-            raw = input("Select your GPU vendor [1-4]: ").strip()
+            raw = input(f"Select your GPU vendor [1-{len(_VENDOR_MENU)}]: ").strip()
         except EOFError:
             print()
             return None
         if raw in choices:
             return choices[raw]
         print(f"Please enter a number 1-{len(_VENDOR_MENU)}.")
+
+
+def _confirm(prompt):
+    """[Y/n] confirm; empty input or EOF counts as yes, anything else re-prompts.
+
+    KeyboardInterrupt propagates.
+    """
+    while True:
+        try:
+            raw = input(prompt).strip().lower()
+        except EOFError:
+            print()
+            return True
+        if raw in ("", "y", "yes"):
+            return True
+        if raw in ("n", "no"):
+            return False
+        print("Please answer y or n.")
 
 
 def cmd_setup(args):
@@ -280,44 +301,65 @@ def cmd_setup(args):
     print(f"  GPU    : {profile.gpu_name or 'unknown'} [{profile.gpu_vendor}]{driver}")
     print(f"  helpers: gamemode={'yes' if profile.has_gamemode else 'no'} "
           f"mangohud={'yes' if profile.has_mangohud else 'no'}")
+    try:
+        return _setup_interact(args, profile, config.get("gpu_vendor", ""))
+    except KeyboardInterrupt:
+        print()
+        return 130
 
-    override = config.get("gpu_vendor", "")
+
+def _setup_interact(args, profile, override):
+    clear_hint = "answer n, then pick 'Autodetect (clear override)' to remove it"
+
     if profile.gpu_vendor != "unknown":
         if override in _VENDORS:
             print(f"\nGPU autodetected as {profile.gpu_vendor}; config override "
-                  f"gpu_vendor={override!r} is active and wins over autodetection.")
-            print(f"Delete gpu_vendor in {args.config} to return to autodetection.")
+                  f"gpu_vendor={override!r} is active and wins over autodetection "
+                  f"({clear_hint}).")
         elif override:
             print(f"\nGPU autodetected as {profile.gpu_vendor}; config value "
-                  f"gpu_vendor={override!r} is not recognized and is ignored.")
+                  f"gpu_vendor={override!r} is not recognized and is ignored "
+                  f"({clear_hint}).")
         else:
             print(f"\nGPU autodetected as {profile.gpu_vendor}; no override needed.")
-        return 0
-
-    if override in _VENDORS:
+        effective = override if override in _VENDORS else profile.gpu_vendor
+        if _confirm(f"\nUse {effective} for launch options? [Y/n]: "):
+            print(f"Keeping {effective}. Nothing written.")
+            return 0
+        print("\nChange it — pick the GPU that drives your games:")
+    elif override in _VENDORS:
         print(f"\nGPU autodetection failed, but config override gpu_vendor={override!r} "
               "is active — scan/apply/advise already use it.")
         print("Pick a vendor to change it, or Skip to keep it:")
     else:
+        if override:
+            print(f"\nNOTE: config value gpu_vendor={override!r} is not recognized "
+                  "and is ignored.")
         print("\nGPU vendor could not be autodetected. Pick it so scan/apply/advise "
               "set vendor-appropriate options:")
-    try:
-        choice = _prompt_gpu_vendor()
-    except KeyboardInterrupt:
-        print()
-        return 130
-    if not choice:
+
+    choice = _prompt_gpu_vendor()
+    if choice is None or choice is _SKIP:
         if override in _VENDORS:
             print(f"No change made; override gpu_vendor={override!r} stays in effect.")
+        elif override:
+            print(f"No change made; unrecognized gpu_vendor={override!r} stays in the "
+                  "config (ignored) and autodetection governs.")
         else:
             print("No change made; GPU autodetection stays in effect.")
+        return 0
+    if choice == "" and not override:
+        print("No override set; GPU autodetection is already in effect. Nothing written.")
         return 0
     try:
         rules.save_gpu_vendor(args.config, choice)
     except OSError as exc:
         print(f"ERROR: could not write {args.config}: {exc}", file=sys.stderr)
         return 1
-    print(f"\nSaved gpu_vendor={choice!r} to {args.config}.")
+    if choice == "":
+        print(f"\nCleared gpu_vendor in {args.config}; GPU autodetection is back in effect.")
+    else:
+        print(f"\nSaved gpu_vendor={choice!r} to {args.config}.")
     print("Nothing is written to Steam yet — the next `steamtrain apply` (or timer "
           "run) uses it; restart Steam afterwards to see the options in the UI.")
     return 0
