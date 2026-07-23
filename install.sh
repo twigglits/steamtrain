@@ -9,9 +9,11 @@ UNIT_DIR="$HOME/.config/systemd/user"
 
 distro_ids() {
     # Emit "ID ID_LIKE" from os-release for matching; empty if unavailable.
+    # Parsed rather than sourced: os-release is shell syntax, so sourcing it
+    # would execute whatever the distro shipped in there.
     [ -r /etc/os-release ] || return 0
-    ( . /etc/os-release 2>/dev/null || true
-      printf '%s %s' "${ID:-}" "${ID_LIKE:-}" )
+    sed -n -e 's/^ID=//p' -e 's/^ID_LIKE=//p' /etc/os-release 2>/dev/null |
+        tr -d "\"'" | tr '\n' ' '
 }
 
 python_install_hint() {
