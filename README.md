@@ -1,5 +1,10 @@
 # steamtrain
 
+[![CI](https://github.com/twigglits/steamtrain/actions/workflows/ci.yml/badge.svg)](https://github.com/twigglits/steamtrain/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
+[![Release](https://img.shields.io/github/v/release/twigglits/steamtrain?sort=semver)](https://github.com/twigglits/steamtrain/releases/latest)
+
 <p align="center">
   <img src="assets/mascot.svg" width="760" height="380" alt="Project mascot: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel, steam puffing from the smokestack and hissing from the valve as the driving wheels turn — a visual pun on Steam launch options.">
 </p>
