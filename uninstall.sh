@@ -6,7 +6,7 @@ set -eu
 systemctl --user disable --now steamtrain.timer 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/steamtrain.service" \
       "$HOME/.config/systemd/user/steamtrain.timer"
-systemctl --user daemon-reload
+systemctl --user daemon-reload 2>/dev/null || true
 
 rm -f "$HOME/.local/bin/steamtrain"
 rm -rf "$HOME/.local/lib/steamtrain"

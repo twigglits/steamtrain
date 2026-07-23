@@ -4,11 +4,14 @@
   <img src="assets/mascot.svg" width="760" height="380" alt="Project mascot: a little steam locomotive whose boiler carries a brass steam gate-valve with a spoked handwheel, steam puffing from the smokestack and hissing from the valve as the driving wheels turn — a visual pun on Steam launch options.">
 </p>
 
-A systemd service for Ubuntu LTS that scans your installed Steam games (only
+A systemd (user) service for Linux that scans your installed Steam games (only
 game folders that actually exist on disk) and sets launch options appropriate
 for **your** OS, desktop environment, and hardware.
 
-No dependencies beyond Python 3 (stdlib only). Fully offline.
+Works across Ubuntu/Debian, Arch, and Fedora (and their derivatives) — anything
+with Python 3.7+ and, for automatic scheduling, a systemd user session. Without
+a systemd user session the CLI still works; you just run `steamtrain apply`
+yourself. No dependencies beyond Python 3 (stdlib only). Fully offline.
 
 ## Why not just copy options from ProtonDB?
 
@@ -58,6 +61,20 @@ launcher to `~/.local/bin`, and installs + starts a systemd **user** timer
 (2 min after boot, then every 30 min — new installs get options
 automatically). Restart Steam to see applied options take effect in the UI.
 
+The installer checks for `python3` first (printing a per-distro install hint
+if it is missing — `pacman`/`dnf`/`apt`, never run for you). If there is no
+systemd user session it warns and skips the timer, leaving a working CLI. When
+run in a terminal it finishes by launching the hardware setup wizard (below);
+piped/non-interactive installs skip it and print a reminder to run
+`steamtrain setup`.
+
+### Supported distributions
+
+Ubuntu/Debian, Arch, and Fedora and their derivatives are all supported; the
+install is identical wherever `python3` (>= 3.7) and a systemd user session are
+present. Older enterprise distros that ship Python 3.6 (RHEL/CentOS 7) are not
+supported; the installer checks and refuses cleanly.
+
 ```sh
 ./uninstall.sh        # run `steamtrain revert` first if you want options cleared
 ```
@@ -65,6 +82,7 @@ automatically). Restart Steam to see applied options take effect in the UI.
 ## CLI
 
 ```sh
+steamtrain setup            # show detected hardware; pick a GPU vendor if autodetect failed
 steamtrain scan             # detected system profile + per-game proposals
 steamtrain apply --dry-run  # what would change, writing nothing
 steamtrain apply            # write (skipped safely if Steam is running)
@@ -75,12 +93,22 @@ steamtrain advise witcher    # LLM-propose an override, matched by game name (re
 steamtrain advise witcher --write   # save the reviewed proposal into overrides
 ```
 
+`steamtrain setup` (also run automatically at the end of an interactive
+install) prints the autodetected hardware profile. If GPU autodetection fails
+it shows a numbered menu — 1) NVIDIA 2) AMD 3) Intel 4) Skip — and saves your
+choice as the `gpu_vendor` config key. When the GPU is detected it just prints
+the summary and notes any active override, without prompting. The menu only
+appears when detection *fails*; if detection succeeds but picks the wrong GPU
+(e.g. hybrid graphics), set `gpu_vendor` in the config by hand. To go back to
+autodetection, set it to `""` (or delete the key).
+
 ## Configuration
 
 `~/.config/steamtrain/config.json` (created on first run):
 
 ```json
 {
+  "gpu_vendor": "",
   "enable_gamemode": true,
   "enable_mangohud": false,
   "enable_nvapi": true,
@@ -94,6 +122,11 @@ steamtrain advise witcher --write   # save the reviewed proposal into overrides
 }
 ```
 
+- `gpu_vendor` — force the GPU vendor (`nvidia` / `amd` / `intel`) when
+  autodetection fails; `""` means autodetect (the default). Set it with
+  `steamtrain setup`; an override wins over detection, an unrecognized value is
+  ignored (with a warning) and autodetection is used. Existing config files
+  without this key keep autodetecting.
 - `enable_*` — toggle individual built-in rules.
 - `overrides` — appid → launch options used verbatim; `{auto}` expands to the
   generated baseline. This is where ProtonDB-sourced, hardware-vetted tips go.

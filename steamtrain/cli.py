@@ -1,6 +1,7 @@
-"""Command-line interface: scan / apply / status / revert."""
+"""Command-line interface: scan / apply / status / revert / setup."""
 
 import argparse
+import dataclasses
 import sys
 
 from . import __version__, apply as apply_mod, advisor, rules, steam, sysinfo
@@ -32,6 +33,9 @@ def _build_parser():
                                 "omit to list installed games")
             p.add_argument("--write", action="store_true",
                            help="save the proposal into config overrides (re-run after reviewing)")
+    setup = sub.add_parser(
+        "setup", help="show detected hardware; pick a GPU vendor when autodetection fails")
+    setup.add_argument("--config", default=rules.DEFAULT_CONFIG_PATH)
     return parser
 
 
@@ -45,9 +49,35 @@ def _context(args):
     return Path(root)
 
 
-def _proposals(root, args):
+_VENDORS = ("nvidia", "amd", "intel")
+_VENDOR_NAMES = {"nvidia": "NVIDIA GPU", "amd": "AMD GPU", "intel": "Intel GPU"}
+
+
+def _profile(config):
+    """Detected system profile with the config's gpu_vendor override applied.
+
+    An empty override means autodetect (unchanged behavior); an unrecognized
+    value is ignored with a warning and autodetection is used. Matching is
+    case-insensitive so the on-screen labels (NVIDIA/AMD/Intel) also work.
+    """
     profile = sysinfo.detect()
+    raw = config.get("gpu_vendor", "")
+    vendor = str(raw or "").strip().lower()
+    if not vendor:
+        return profile
+    if vendor in _VENDORS:
+        return dataclasses.replace(
+            profile, gpu_vendor=vendor,
+            gpu_name=profile.gpu_name or _VENDOR_NAMES[vendor],
+            gpu_driver=profile.gpu_driver or "set via steamtrain setup")
+    print(f"WARNING: ignoring unrecognized gpu_vendor {raw!r}; using autodetection",
+          file=sys.stderr)
+    return profile
+
+
+def _proposals(root, args):
     config = rules.load_config(args.config)
+    profile = _profile(config)
     games = steam.installed_games(root)
     options = {}
     names = {}
@@ -185,8 +215,8 @@ def cmd_advise(args):
     if game is None:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    profile = sysinfo.detect()
     config = rules.load_config(args.config)
+    profile = _profile(config)
     try:
         prop = advisor.advise(game, profile, config)
     except advisor.AdvisorError as exc:
@@ -213,9 +243,89 @@ def cmd_advise(args):
     return 0
 
 
+_VENDOR_MENU = (
+    ("1", "nvidia", "NVIDIA"),
+    ("2", "amd", "AMD"),
+    ("3", "intel", "Intel"),
+    ("4", "", "Skip (no change)"),
+)
+
+
+def _prompt_gpu_vendor():
+    """Numbered menu -> chosen vendor ('' for skip), or None on EOF.
+
+    KeyboardInterrupt propagates to the caller (exit 130).
+    """
+    for num, _value, label in _VENDOR_MENU:
+        print(f"  {num}) {label}")
+    choices = {num: value for num, value, _ in _VENDOR_MENU}
+    while True:
+        try:
+            raw = input("Select your GPU vendor [1-4]: ").strip()
+        except EOFError:
+            print()
+            return None
+        if raw in choices:
+            return choices[raw]
+        print(f"Please enter a number 1-{len(_VENDOR_MENU)}.")
+
+
+def cmd_setup(args):
+    profile = sysinfo.detect()
+    config = rules.load_config(args.config)
+    driver = f" {profile.gpu_driver}" if profile.gpu_driver else ""
+    print("Detected hardware profile:")
+    print(f"  distro : {profile.distro}")
+    print(f"  desktop: {profile.desktop} ({profile.session})")
+    print(f"  GPU    : {profile.gpu_name or 'unknown'} [{profile.gpu_vendor}]{driver}")
+    print(f"  helpers: gamemode={'yes' if profile.has_gamemode else 'no'} "
+          f"mangohud={'yes' if profile.has_mangohud else 'no'}")
+
+    override = config.get("gpu_vendor", "")
+    if profile.gpu_vendor != "unknown":
+        if override in _VENDORS:
+            print(f"\nGPU autodetected as {profile.gpu_vendor}; config override "
+                  f"gpu_vendor={override!r} is active and wins over autodetection.")
+            print(f"Delete gpu_vendor in {args.config} to return to autodetection.")
+        elif override:
+            print(f"\nGPU autodetected as {profile.gpu_vendor}; config value "
+                  f"gpu_vendor={override!r} is not recognized and is ignored.")
+        else:
+            print(f"\nGPU autodetected as {profile.gpu_vendor}; no override needed.")
+        return 0
+
+    if override in _VENDORS:
+        print(f"\nGPU autodetection failed, but config override gpu_vendor={override!r} "
+              "is active — scan/apply/advise already use it.")
+        print("Pick a vendor to change it, or Skip to keep it:")
+    else:
+        print("\nGPU vendor could not be autodetected. Pick it so scan/apply/advise "
+              "set vendor-appropriate options:")
+    try:
+        choice = _prompt_gpu_vendor()
+    except KeyboardInterrupt:
+        print()
+        return 130
+    if not choice:
+        if override in _VENDORS:
+            print(f"No change made; override gpu_vendor={override!r} stays in effect.")
+        else:
+            print("No change made; GPU autodetection stays in effect.")
+        return 0
+    try:
+        rules.save_gpu_vendor(args.config, choice)
+    except OSError as exc:
+        print(f"ERROR: could not write {args.config}: {exc}", file=sys.stderr)
+        return 1
+    print(f"\nSaved gpu_vendor={choice!r} to {args.config}.")
+    print("Nothing is written to Steam yet — the next `steamtrain apply` (or timer "
+          "run) uses it; restart Steam afterwards to see the options in the UI.")
+    return 0
+
+
 COMMANDS = {
     "scan": cmd_scan, "apply": cmd_apply, "status": cmd_status,
-    "revert": cmd_revert, "advise": cmd_advise,
+    "revert": cmd_revert, "advise": cmd_advise, "setup": cmd_setup,
 }
 
 

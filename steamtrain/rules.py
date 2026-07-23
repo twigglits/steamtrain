@@ -14,7 +14,9 @@ from pathlib import Path
 DEFAULT_CONFIG_PATH = Path("~/.config/steamtrain/config.json").expanduser()
 
 _DOC = (
-    "Edit and save; next run picks it up. enable_* toggle built-in rules. "
+    "Edit and save; next run picks it up. gpu_vendor: force nvidia/amd/intel "
+    "when autodetection fails ('' = autodetect); set it with `steamtrain setup`. "
+    "enable_* toggle built-in rules. "
     "overrides: map of appid -> launch options used verbatim; the string "
     "'{auto}' inside an override expands to the generated baseline. "
     "exclude: list of appids this tool must never touch. "
@@ -26,6 +28,7 @@ _DOC = (
 def default_config():
     return {
         "_doc": _DOC,
+        "gpu_vendor": "",
         "enable_gamemode": True,
         "enable_mangohud": False,
         "enable_nvapi": True,
@@ -97,4 +100,13 @@ def save_override(path, appid, value):
     load_config(path)  # create the documented default file if it does not exist yet
     data = json.loads(path.read_text())
     data.setdefault("overrides", {})[str(appid)] = value
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def save_gpu_vendor(path, vendor):
+    """Merge gpu_vendor=vendor into the config file, preserving everything else."""
+    path = Path(path)
+    load_config(path)  # create the documented default file if it does not exist yet
+    data = json.loads(path.read_text())
+    data["gpu_vendor"] = vendor
     path.write_text(json.dumps(data, indent=2) + "\n")
