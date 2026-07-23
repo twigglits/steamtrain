@@ -331,7 +331,11 @@ COMMANDS = {
 
 def main(argv=None):
     args = _build_parser().parse_args(argv)
-    return COMMANDS[args.command](args)
+    try:
+        return COMMANDS[args.command](args)
+    except rules.ConfigError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

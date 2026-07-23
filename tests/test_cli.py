@@ -240,6 +240,25 @@ class TestCli(unittest.TestCase):
         inp.assert_not_called()
         self.assertIn("not recognized", out)
 
+    def test_malformed_config_errors_cleanly(self):
+        # syntax error, valid-but-non-object roots
+        for bad in ('{"gpu_vendor": "nvidia",}', "null", "[1, 2]", '"hello"'):
+            self.config_path.write_text(bad)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code, out = self.run_cli("scan")
+            self.assertEqual(code, 1, f"config: {bad}")
+            self.assertIn("invalid", err.getvalue())
+            self.assertIn(str(self.config_path), err.getvalue())
+
+    def test_non_utf8_config_errors_cleanly(self):
+        self.config_path.write_bytes(b'\xff\xfe{"a": 1}')
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code, out = self.run_setup()
+        self.assertEqual(code, 1)
+        self.assertIn("invalid", err.getvalue())
+
     def test_override_is_case_insensitive(self):
         self.config_path.write_text(json.dumps({"gpu_vendor": "NVIDIA"}))
         with mock.patch("steamtrain.sysinfo.detect", return_value=fake_profile("unknown")):

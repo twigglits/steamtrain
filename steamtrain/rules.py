@@ -41,6 +41,25 @@ def default_config():
     }
 
 
+class ConfigError(Exception):
+    """Config file exists but cannot be parsed."""
+
+
+def _read_json(path):
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ConfigError(
+            f"invalid JSON in {path}: {exc}. "
+            "Fix the file, or delete it to regenerate defaults.") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(
+            f"invalid config in {path}: top level must be a JSON object, not "
+            f"{type(data).__name__}. Fix the file, or delete it to regenerate "
+            "defaults.")
+    return data
+
+
 def load_config(path=DEFAULT_CONFIG_PATH):
     """Load config, creating a documented default file on first run."""
     path = Path(path)
@@ -48,7 +67,7 @@ def load_config(path=DEFAULT_CONFIG_PATH):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(default_config(), indent=2) + "\n")
     config = default_config()
-    config.update(json.loads(path.read_text()))
+    config.update(_read_json(path))
     return config
 
 
@@ -98,7 +117,7 @@ def save_override(path, appid, value):
     """Merge overrides[appid]=value into the config file, preserving everything else."""
     path = Path(path)
     load_config(path)  # create the documented default file if it does not exist yet
-    data = json.loads(path.read_text())
+    data = _read_json(path)
     data.setdefault("overrides", {})[str(appid)] = value
     path.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -107,6 +126,6 @@ def save_gpu_vendor(path, vendor):
     """Merge gpu_vendor=vendor into the config file, preserving everything else."""
     path = Path(path)
     load_config(path)  # create the documented default file if it does not exist yet
-    data = json.loads(path.read_text())
+    data = _read_json(path)
     data["gpu_vendor"] = vendor
     path.write_text(json.dumps(data, indent=2) + "\n")
