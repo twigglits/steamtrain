@@ -9,4 +9,4 @@ Terminal=false
 Categories=Game;Settings;
 Keywords=steam;proton;launch;options;gaming;gpu;gamemode;
 StartupNotify=true
-StartupWMClass=steamtrain-gui
+StartupWMClass=steamtrain
